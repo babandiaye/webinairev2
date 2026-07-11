@@ -1,0 +1,26 @@
+node_modules/
+dist/
+build/
+*.tsbuildinfo
+.pnpm-store/
+coverage/
+
+# Secrets / environnement (garder .env.example, c'est un gabarit sans vraies valeurs)
+.env
+.env.local
+.env.*.local
+
+# Clés, certificats — aucun n'est censé vivre dans le repo, filet de sécurité
+*.pem
+*.key
+*.crt
+*.p12
+
+infra/data/
+apps/backend/prisma/migrations/dev.db
+*.sqlite*
+
+*.log
+.DS_Store
+.vscode/
+.idea/

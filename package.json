@@ -1,0 +1,13 @@
+{
+  "name": "webinairev2",
+  "private": true,
+  "packageManager": "pnpm@9.15.0",
+  "scripts": {
+    "dev:backend": "pnpm --filter @webinairev2/backend dev",
+    "dev:frontend": "pnpm --filter @webinairev2/frontend dev",
+    "build": "pnpm --filter @webinairev2/shared-types build && pnpm --filter @webinairev2/backend build && pnpm --filter @webinairev2/frontend build",
+    "prisma:generate": "pnpm --filter @webinairev2/backend prisma:generate",
+    "prisma:migrate": "pnpm --filter @webinairev2/backend prisma:migrate",
+    "start": "pnpm --filter @webinairev2/backend start"
+  }
+}

@@ -1,0 +1,102 @@
+import { Track } from "livekit-client";
+import { useIsMuted, useLocalParticipant, useTracks, VideoTrack } from "@livekit/components-react";
+import type { TrackReference } from "@livekit/components-react";
+import { Video, VideoOff } from "lucide-react";
+import type { Role } from "@webinairev2/shared-types";
+
+function isModeratorMetadata(metadata: string | undefined): boolean {
+  try {
+    const parsed = metadata ? JSON.parse(metadata) : null;
+    return parsed?.isModerator === true;
+  } catch {
+    return false;
+  }
+}
+
+function participantLabel(track: TrackReference): string {
+  return track.participant.name || track.participant.identity;
+}
+
+// useTracks (onlySubscribed, par défaut) garantit que publication.track existe,
+// mais pas qu'il produise une image : une caméra coupée côté émetteur reste
+// "abonnée" côté LiveKit, juste avec une piste vide (rendu : cadre noir). Le
+// composant ParticipantTile de la lib gère ça nativement en basculant sur un
+// avatar dès que la piste est muted ; comme on ne l'utilise plus (cf. commentaire
+// plus bas, modèle non-grille), il faut reproduire ce garde-fou nous-mêmes, sous
+// peine d'un <video> monté mais purement noir — exactement le symptôme observé.
+function StageVideo({ trackRef, compact }: { trackRef: TrackReference; compact?: boolean }) {
+  const isMuted = useIsMuted(trackRef);
+
+  if (isMuted) {
+    return (
+      <div className={compact ? "call-stage-secondary-off" : "call-stage-waiting"}>
+        <VideoOff size={compact ? 20 : 40} />
+        {!compact && <p>{participantLabel(trackRef)} — caméra coupée</p>}
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <VideoTrack trackRef={trackRef} className="call-stage-video" />
+      <div className="call-stage-name-tag">{participantLabel(trackRef)}</div>
+    </>
+  );
+}
+
+// Volontairement PAS de grille façon Zoom/Meet (une vignette par participant) :
+// une salle peut compter jusqu'à ~1000 participants, et seuls le modérateur et
+// les quelques personnes ayant reçu le droit de parole/présentation publient
+// jamais une caméra ou un partage d'écran (voir setSpeakerPermission/
+// setPresenterPermission côté RoomsService) — les afficher tous exploserait le
+// rendu pour rien, puisque l'immense majorité des participants n'a aucune piste
+// à montrer. Modèle repris de livestreamv3 : une seule vidéo principale (partage
+// d'écran en priorité, sinon la caméra du modérateur) + une petite bande de
+// vignettes secondaires pour les autres orateurs actifs.
+export function CallStage() {
+  const { localParticipant } = useLocalParticipant();
+  const tracks = useTracks([Track.Source.Camera, Track.Source.ScreenShare]);
+
+  const screenTrack = tracks.find((t) => t.source === Track.Source.ScreenShare);
+  const camTracks = tracks.filter((t) => t.source === Track.Source.Camera);
+  const mainCamTrack =
+    camTracks.find((t) => isModeratorMetadata(t.participant.metadata)) ?? camTracks[0];
+  const secondaryCamTracks = camTracks.filter(
+    (t) => t.participant.identity !== mainCamTrack?.participant.identity
+  );
+
+  const mainTrack = screenTrack ?? mainCamTrack;
+  const localRole: Role | undefined = (() => {
+    try {
+      return localParticipant.metadata ? JSON.parse(localParticipant.metadata).role : undefined;
+    } catch {
+      return undefined;
+    }
+  })();
+
+  return (
+    <div className="call-stage">
+      <div className="call-stage-main">
+        {mainTrack ? (
+          <StageVideo trackRef={mainTrack} />
+        ) : (
+          <div className="call-stage-waiting">
+            <Video size={40} />
+            <p>En attente du modérateur…</p>
+            {localRole === "VIEWER" && <span>La session commencera dès l'activation de sa caméra.</span>}
+          </div>
+        )}
+      </div>
+
+      {secondaryCamTracks.length > 0 && (
+        <div className="call-stage-secondary">
+          {secondaryCamTracks.map((t) => (
+            <div className="call-stage-secondary-tile" key={t.participant.identity}>
+              <StageVideo trackRef={t} compact />
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}

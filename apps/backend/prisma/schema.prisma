@@ -1,0 +1,210 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  MODERATOR
+  VIEWER
+}
+
+enum RoomType {
+  MAIN
+  BREAKOUT
+}
+
+enum RoomStatus {
+  SCHEDULED
+  LIVE
+  ENDED
+}
+
+enum RecordingStatus {
+  STARTING
+  ACTIVE
+  ENDING
+  READY
+  FAILED
+}
+
+enum PollStatus {
+  DRAFT
+  OPEN
+  CLOSED
+}
+
+enum PresentationStatus {
+  UPLOADED
+  CONVERTING
+  READY
+  FAILED
+}
+
+model User {
+  id           String   @id @default(cuid())
+  keycloakId   String   @unique
+  email        String   @unique
+  name         String
+  role         Role     @default(VIEWER)
+  createdRooms Room[]
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("users")
+}
+
+model Room {
+  id                    String     @id @default(cuid())
+  roomName              String     @unique
+  title                 String
+  type                  RoomType   @default(MAIN)
+  parentRoomId          String?
+  parentRoom            Room?      @relation("Breakouts", fields: [parentRoomId], references: [id], onDelete: Cascade)
+  breakoutRooms         Room[]     @relation("Breakouts")
+  // Uniquement rempli sur une Room de type BREAKOUT : userIds affectés à ce groupe
+  // (un utilisateur ne peut appartenir qu'à un seul groupe à la fois par salle mère).
+  assignedUserIds       String[]   @default([])
+  creatorId             String
+  creator               User       @relation(fields: [creatorId], references: [id])
+  status                RoomStatus @default(SCHEDULED)
+  startedAt             DateTime?
+  endedAt               DateTime?
+  currentPresentationId String?
+  // Le tableau blanc est une session partagée : ouvert/fermé pour tout le monde
+  // à la fois (pas un état d'affichage local par participant).
+  whiteboardOpen        Boolean    @default(false)
+  // Rempli uniquement pour une Room créée depuis le plugin Moodle (mod_webinairev2) —
+  // moodleMeetingId identifie l'instance d'activité de façon unique et sert de clé
+  // d'idempotence (POST /moodle/rooms ne doit jamais créer deux Room pour la même
+  // activité rappelée plusieurs fois).
+  moodleCourseId        String?
+  moodleMeetingId        String?    @unique
+  recordings            Recording[]
+  polls                 Poll[]
+  presentations         Presentation[]
+  whiteboardSnapshot    WhiteboardSnapshot?
+  attendanceRecords     AttendanceRecord[]
+  createdAt             DateTime   @default(now())
+  updatedAt             DateTime   @updatedAt
+
+  @@index([parentRoomId])
+  @@map("rooms")
+}
+
+model Recording {
+  id        String          @id @default(cuid())
+  roomId    String
+  room      Room            @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  s3Key     String          @default("")
+  s3Bucket  String          @default("")
+  filename  String          @default("")
+  duration  Int?
+  size      BigInt?
+  egressId  String?
+  status    RecordingStatus @default(STARTING)
+  startedAt DateTime?
+  createdAt DateTime        @default(now())
+
+  @@index([roomId])
+  @@map("recordings")
+}
+
+model Poll {
+  id        String       @id @default(cuid())
+  roomId    String
+  room      Room         @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  question  String
+  status    PollStatus   @default(DRAFT)
+  multiple  Boolean      @default(false)
+  createdBy String
+  options   PollOption[]
+  createdAt DateTime     @default(now())
+  closedAt  DateTime?
+
+  @@index([roomId])
+  @@map("polls")
+}
+
+model PollOption {
+  id        String         @id @default(cuid())
+  pollId    String
+  poll      Poll           @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  label     String
+  responses PollResponse[]
+
+  @@map("poll_options")
+}
+
+model PollResponse {
+  id           String     @id @default(cuid())
+  pollOptionId String
+  pollOption   PollOption @relation(fields: [pollOptionId], references: [id], onDelete: Cascade)
+  identity     String
+  createdAt    DateTime   @default(now())
+
+  @@unique([pollOptionId, identity])
+  @@map("poll_responses")
+}
+
+model Presentation {
+  id                String              @id @default(cuid())
+  roomId            String
+  room              Room                @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  filename          String
+  status            PresentationStatus  @default(UPLOADED)
+  slideCount        Int                 @default(0)
+  currentSlideIndex Int                 @default(0)
+  slides            PresentationSlide[]
+  uploadedBy        String
+  createdAt         DateTime            @default(now())
+
+  @@index([roomId])
+  @@map("presentations")
+}
+
+model PresentationSlide {
+  id             String       @id @default(cuid())
+  presentationId String
+  presentation   Presentation @relation(fields: [presentationId], references: [id], onDelete: Cascade)
+  index          Int
+  s3Key          String
+  width          Int?
+  height         Int?
+
+  @@unique([presentationId, index])
+  @@map("presentation_slides")
+}
+
+// Une ligne par connexion LiveKit réelle (participant_joined/participant_left,
+// voir LiveKitWebhookController) — pas une ligne par utilisateur : une même
+// personne qui se reconnecte (rafraîchissement, coupure réseau) génère plusieurs
+// lignes, sommées côté AttendanceService pour le temps de présence total. leftAt
+// à null tant que le webhook participant_left correspondant n'est pas arrivé.
+model AttendanceRecord {
+  id          String    @id @default(cuid())
+  roomId      String
+  room        Room      @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  identity    String
+  name        String
+  isModerator Boolean   @default(false)
+  joinedAt    DateTime
+  leftAt      DateTime?
+
+  @@index([roomId])
+  @@index([roomId, identity])
+  @@map("attendance_records")
+}
+
+model WhiteboardSnapshot {
+  roomId    String   @id
+  room      Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  sceneData Json
+  updatedAt DateTime @updatedAt
+
+  @@map("whiteboard_snapshots")
+}

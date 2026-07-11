@@ -1,0 +1,186 @@
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
+import { EncodedFileOutput, EncodedFileType, EncodingOptionsPreset } from "livekit-server-sdk";
+import { RecordingStatus, Role, RoomStatus } from "@prisma/client";
+import { PrismaService } from "../prisma/prisma.service";
+import { LiveKitClientsService } from "../livekit/livekit-clients.service";
+import { S3Service } from "../storage/s3.service";
+import { SessionUser } from "../auth/session.types";
+import { DownloadLinkDto, RecordingDto } from "@webinairev2/shared-types";
+import { signDownloadToken } from "../common/download-token.util";
+
+const DOWNLOAD_LINK_TTL_SECONDS = 5 * 60;
+const EGRESS_TOKEN_TTL_SECONDS = 12 * 60 * 60;
+
+// Un enregistrement traverse STARTING (requête envoyée à LiveKit, egress pas
+// encore confirmé actif) -> ACTIVE (confirmé par webhook egress_active) ->
+// ENDING (arrêt demandé, fichier en cours de finalisation/upload) -> READY.
+// Ces 3 états comptent comme "en cours" pour bloquer un double démarrage,
+// autoriser l'arrêt, ou empêcher la suppression.
+export const RECORDING_IN_PROGRESS_STATUSES: RecordingStatus[] = [
+  RecordingStatus.STARTING,
+  RecordingStatus.ACTIVE,
+  RecordingStatus.ENDING,
+];
+
+// Nom de fichier façon BigBlueButton : pas de préfixe applicatif, UUID compacté
+// (seul le tiret précédant les 12 derniers caractères est conservé) + horodatage.
+function buildRecordingFilepath(roomName: string): string {
+  const uuid = roomName.replace(/^webinairev2-/, "");
+  const parts = uuid.split("-");
+  const compact = parts.length === 5 ? `${parts.slice(0, 4).join("")}-${parts[4]}` : uuid;
+  return `recordings/${compact}-${Date.now()}.mp4`;
+}
+
+@Injectable()
+export class RecordingsService {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly livekitClients: LiveKitClientsService,
+    private readonly s3: S3Service,
+    private readonly config: ConfigService
+  ) {}
+
+  async start(roomId: string): Promise<RecordingDto> {
+    const room = await this.prisma.room.findUnique({ where: { id: roomId } });
+    if (!room) throw new NotFoundException("Salle introuvable");
+    if (room.status !== RoomStatus.LIVE) {
+      throw new BadRequestException("La salle doit être en direct pour démarrer un enregistrement");
+    }
+
+    const active = await this.prisma.recording.findFirst({
+      where: { roomId, status: { in: RECORDING_IN_PROGRESS_STATUSES } },
+    });
+    if (active) {
+      throw new BadRequestException("Un enregistrement est déjà en cours pour cette salle");
+    }
+
+    const filepath = buildRecordingFilepath(room.roomName);
+    const output = new EncodedFileOutput({
+      fileType: EncodedFileType.MP4,
+      filepath,
+      output: { case: "s3", value: this.s3.buildEgressUploadConfig() },
+    });
+
+    // Web Egress (pas Room Composite) : LiveKit ouvre cette URL dans un Chrome
+    // headless et enregistre littéralement ce qui s'y affiche — grille vidéo ET
+    // tableau blanc/présentation partagés, que Room Composite ne peut pas voir
+    // (il ne rend que les pistes média publiées, jamais notre UI React).
+    const exp = Math.floor(Date.now() / 1000) + EGRESS_TOKEN_TTL_SECONDS;
+    const egressToken = signDownloadToken(
+      { resourceId: roomId, exp },
+      this.config.get<string>("secrets.downloadLink")!
+    );
+    const egressUrl = `${this.config.get<string>("frontendUrl")}/egress-view/${roomId}?token=${encodeURIComponent(egressToken)}`;
+
+    const egressInfo = await this.livekitClients.egressClient.startWebEgress(egressUrl, output, {
+      encodingOptions: EncodingOptionsPreset.H264_1080P_30,
+      // Le Chrome headless doit avoir rejoint la salle LiveKit et fini de rendre
+      // la page avant que l'enregistrement ne démarre (sinon on capture un écran
+      // de chargement vide) — cf. le console.log("START_RECORDING") côté frontend.
+      awaitStartSignal: true,
+    });
+
+    const recording = await this.prisma.recording.create({
+      data: {
+        roomId,
+        egressId: egressInfo.egressId,
+        status: RecordingStatus.STARTING,
+        startedAt: new Date(),
+      },
+    });
+
+    return this.toDto(recording);
+  }
+
+  async stop(roomId: string): Promise<RecordingDto> {
+    const active = await this.prisma.recording.findFirst({
+      where: { roomId, status: { in: RECORDING_IN_PROGRESS_STATUSES } },
+    });
+    if (!active?.egressId) {
+      throw new BadRequestException("Aucun enregistrement actif pour cette salle");
+    }
+
+    await this.livekitClients.egressClient.stopEgress(active.egressId);
+    // Mis à jour tout de suite pour une UI réactive — le webhook egress_updated
+    // (EGRESS_ENDING) confirmera le même état sous peu, de façon idempotente.
+    const updated = await this.prisma.recording.update({
+      where: { id: active.id },
+      data: { status: RecordingStatus.ENDING },
+    });
+    return this.toDto(updated);
+  }
+
+  async list(roomId: string): Promise<RecordingDto[]> {
+    const recordings = await this.prisma.recording.findMany({
+      where: { roomId },
+      orderBy: { createdAt: "desc" },
+    });
+    return recordings.map((r) => this.toDto(r));
+  }
+
+  // Jamais d'URL/clé S3 exposée directement — un lien signé HMAC de courte durée,
+  // et uniquement après vérification que l'appelant est créateur de la salle ou
+  // administrateur (leçon #1 de l'audit livestreamv3).
+  async getDownloadLink(recordingId: string, user: SessionUser): Promise<DownloadLinkDto> {
+    const recording = await this.prisma.recording.findUnique({
+      where: { id: recordingId },
+      include: { room: true },
+    });
+    if (!recording) throw new NotFoundException("Enregistrement introuvable");
+    if (recording.status !== RecordingStatus.READY) {
+      throw new BadRequestException("Cet enregistrement n'est pas encore disponible");
+    }
+    if (user.role !== Role.ADMIN && recording.room.creatorId !== user.id) {
+      throw new ForbiddenException("Vous n'êtes pas autorisé à télécharger cet enregistrement");
+    }
+
+    const exp = Math.floor(Date.now() / 1000) + DOWNLOAD_LINK_TTL_SECONDS;
+    const token = signDownloadToken(
+      { resourceId: recording.id, exp },
+      this.config.get<string>("secrets.downloadLink")!
+    );
+
+    return {
+      url: `/recordings/download?token=${encodeURIComponent(token)}`,
+      expiresAt: new Date(exp * 1000).toISOString(),
+    };
+  }
+
+  async remove(roomId: string, recordingId: string): Promise<void> {
+    const recording = await this.prisma.recording.findUnique({ where: { id: recordingId } });
+    if (!recording || recording.roomId !== roomId) {
+      throw new NotFoundException("Enregistrement introuvable");
+    }
+    if (RECORDING_IN_PROGRESS_STATUSES.includes(recording.status)) {
+      throw new BadRequestException("Arrêtez l'enregistrement avant de le supprimer");
+    }
+
+    if (recording.s3Key) {
+      await this.s3.deleteObject(recording.s3Key);
+    }
+    await this.prisma.recording.delete({ where: { id: recordingId } });
+  }
+
+  private toDto(recording: {
+    id: string;
+    roomId: string;
+    filename: string;
+    duration: number | null;
+    size: bigint | null;
+    status: RecordingStatus;
+    startedAt: Date | null;
+    createdAt: Date;
+  }): RecordingDto {
+    return {
+      id: recording.id,
+      roomId: recording.roomId,
+      filename: recording.filename,
+      duration: recording.duration,
+      size: recording.size?.toString() ?? null,
+      status: recording.status,
+      startedAt: recording.startedAt?.toISOString() ?? null,
+      createdAt: recording.createdAt.toISOString(),
+    };
+  }
+}

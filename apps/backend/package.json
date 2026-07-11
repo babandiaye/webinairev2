@@ -1,0 +1,48 @@
+{
+  "name": "@webinairev2/backend",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "nest start --watch",
+    "build": "nest build",
+    "start": "node dist/main.js",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev",
+    "lint": "eslint \"src/**/*.ts\"",
+    "test": "jest"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.685.0",
+    "@aws-sdk/s3-request-presigner": "^3.685.0",
+    "@nestjs/bullmq": "^10.2.3",
+    "@nestjs/common": "^10.4.4",
+    "@nestjs/config": "^3.3.0",
+    "@nestjs/core": "^10.4.4",
+    "@nestjs/platform-express": "^10.4.4",
+    "@nestjs/schedule": "^4.1.1",
+    "@nestjs/terminus": "^10.2.3",
+    "@prisma/client": "^5.21.1",
+    "@webinairev2/shared-types": "workspace:*",
+    "bullmq": "^5.21.2",
+    "class-transformer": "^0.5.1",
+    "class-validator": "^0.14.1",
+    "connect-redis": "^7.1.1",
+    "express-session": "^1.18.1",
+    "ioredis": "^5.4.1",
+    "livekit-server-sdk": "^2.9.1",
+    "openid-client": "^5.7.1",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.1",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@nestjs/cli": "^10.4.5",
+    "@nestjs/schematics": "^10.2.3",
+    "@nestjs/testing": "^10.4.4",
+    "@types/express": "^5.0.0",
+    "@types/express-session": "^1.18.0",
+    "@types/node": "^22.7.5",
+    "prisma": "^5.21.1",
+    "typescript": "^5.6.3"
+  }
+}
