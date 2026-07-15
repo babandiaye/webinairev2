@@ -15,6 +15,7 @@ import {
   MessageSquare,
   Mic,
   MicOff,
+  MoreHorizontal,
   ScreenShare,
   Square,
   Users,
@@ -167,11 +168,16 @@ export function CallControlBar({
   canManage,
   onOpenChat,
   onOpenParticipants,
+  onOpenMore,
 }: {
   roomId: string;
   canManage: boolean;
   onOpenChat: () => void;
   onOpenParticipants: () => void;
+  // Sur mobile, CallSideNav (tableau blanc/sondages/présentations/sous-groupes)
+  // devient une feuille d'actions repliée par défaut — ce bouton l'ouvre. Bouton
+  // masqué en CSS sur desktop, où ce rail reste visible en permanence.
+  onOpenMore: () => void;
 }) {
   const mic = useTrackToggle({ source: Track.Source.Microphone });
   const camera = useTrackToggle({ source: Track.Source.Camera });
@@ -329,6 +335,13 @@ export function CallControlBar({
       <SimpleControlButton label="Discussion" icon={<MessageSquare size={22} />} onClick={onOpenChat} />
 
       <SimpleControlButton label="Participants" icon={<Users size={22} />} onClick={onOpenParticipants} />
+
+      <button className="call-control-btn call-control-btn-more" onClick={onOpenMore} title="Plus d'options">
+        <span className="call-control-icon">
+          <MoreHorizontal size={22} />
+        </span>
+        <span className="call-control-label">Plus</span>
+      </button>
     </div>
   );
 }

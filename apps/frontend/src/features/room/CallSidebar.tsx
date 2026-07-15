@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Hand, Mic, MicOff, ScreenShare, UserX } from "lucide-react";
+import { Hand, Mic, MicOff, ScreenShare, UserX, X } from "lucide-react";
 import { useDataChannel, useParticipants } from "@livekit/components-react";
 import type { Role } from "@webinairev2/shared-types";
 import { api } from "../../api/client";
@@ -40,12 +40,16 @@ export function CallSidebar({
   canManage,
   tab,
   onTabChange,
+  mobileOpen,
+  onCloseMobile,
 }: {
   roomId: string;
   localIdentity: string;
   canManage: boolean;
   tab: SidebarTab;
   onTabChange: (tab: SidebarTab) => void;
+  mobileOpen: boolean;
+  onCloseMobile: () => void;
 }) {
   const participants = useParticipants();
   const [actionBusy, setActionBusy] = useState<string | null>(null);
@@ -111,18 +115,26 @@ export function CallSidebar({
   }
 
   return (
-    <div className="call-sidebar">
-      <div className="call-sidebar-tabs">
-        <button
-          className={`call-sidebar-tab ${tab === "participants" ? "active" : ""}`}
-          onClick={() => onTabChange("participants")}
-        >
-          Participants ({participants.length})
-        </button>
-        <button className={`call-sidebar-tab ${tab === "chat" ? "active" : ""}`} onClick={() => onTabChange("chat")}>
-          Discussion
-        </button>
-      </div>
+    <>
+      {mobileOpen && <div className="call-overlay-backdrop" onClick={onCloseMobile} />}
+      <div className={`call-sidebar ${mobileOpen ? "open" : ""}`}>
+        <div className="call-sidebar-tabs">
+          <button
+            className={`call-sidebar-tab ${tab === "participants" ? "active" : ""}`}
+            onClick={() => onTabChange("participants")}
+          >
+            Participants ({participants.length})
+          </button>
+          <button
+            className={`call-sidebar-tab ${tab === "chat" ? "active" : ""}`}
+            onClick={() => onTabChange("chat")}
+          >
+            Discussion
+          </button>
+          <button className="call-sidebar-close" onClick={onCloseMobile} title="Fermer" aria-label="Fermer">
+            <X size={16} />
+          </button>
+        </div>
 
       <div className="call-sidebar-content">
         {/* Les deux panneaux restent montés en permanence (affichage piloté en
@@ -205,6 +217,7 @@ export function CallSidebar({
           </div>
         </div>
       </div>
-    </div>
+      </div>
+    </>
   );
 }

@@ -51,8 +51,21 @@ export function Whiteboard({ roomId, canManage }: { roomId: string; canManage: b
     return () => clearInterval(interval);
   }, [roomId]);
 
+  // Ne recharge l'instantané serveur qu'une seule fois par ouverture — sinon,
+  // si excalidrawAPI change de référence pendant que quelqu'un écrit (Excalidraw
+  // peut rappeler excalidrawAPI(...) plus d'une fois), cet effet se redéclenche
+  // et écrase le dessin en cours avec le dernier instantané SAUVEGARDÉ, potentiellement
+  // vieux de plusieurs secondes (SAVE_DEBOUNCE_MS) — symptôme : le trait qu'on
+  // vient de tracer disparaît immédiatement.
+  const loadedForOpenRef = useRef(false);
   useEffect(() => {
-    if (!excalidrawAPI || !open) return;
+    if (!open) {
+      loadedForOpenRef.current = false;
+      return;
+    }
+    if (!excalidrawAPI || loadedForOpenRef.current) return;
+    loadedForOpenRef.current = true;
+
     api
       .getWhiteboard(roomId)
       .then((snapshot) => {

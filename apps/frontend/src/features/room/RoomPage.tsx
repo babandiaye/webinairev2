@@ -31,6 +31,12 @@ export function RoomPage() {
   const [activeConnection, setActiveConnection] = useState<JoinRoomResponseDto | null>(null);
   const [activePanel, setActivePanel] = useState<CallPanel | null>(null);
   const [sidebarTab, setSidebarTab] = useState<SidebarTab>("participants");
+  // Panneaux latéraux mobiles (voir CallSideNav/CallSidebar) — sans effet sur
+  // desktop où ils restent des colonnes en permanence visibles (CSS uniquement,
+  // le breakpoint mobile est ce qui donne un sens à ces états). Un seul ouvert
+  // à la fois : ouvrir l'un referme l'autre plutôt que de les empiler.
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [mobileSideNavOpen, setMobileSideNavOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [waitingForModerator, setWaitingForModerator] = useState(false);
   // Distingue un vrai départ (bouton "quitter", → retour à l'accueil) d'un
@@ -112,6 +118,7 @@ export function RoomPage() {
   }
 
   function handleSelectPanel(panel: CallPanel) {
+    setMobileSideNavOpen(false);
     if (panel === "whiteboard") {
       // Le tableau blanc est une session partagée (ouverte pour tout le monde),
       // pas un panneau d'affichage local — voir Whiteboard.tsx.
@@ -152,6 +159,8 @@ export function RoomPage() {
         isInBreakout={isInBreakout}
         activePanel={activePanel}
         onSelect={handleSelectPanel}
+        mobileOpen={mobileSideNavOpen}
+        onCloseMobile={() => setMobileSideNavOpen(false)}
       />
       <CallSidebar
         roomId={activeConnection.room.id}
@@ -159,6 +168,8 @@ export function RoomPage() {
         canManage={canManage && !isInBreakout}
         tab={sidebarTab}
         onTabChange={setSidebarTab}
+        mobileOpen={mobileSidebarOpen}
+        onCloseMobile={() => setMobileSidebarOpen(false)}
       />
 
       <div className="call-main">
@@ -207,8 +218,20 @@ export function RoomPage() {
           <CallControlBar
             roomId={activeConnection.room.id}
             canManage={canManage && !isInBreakout}
-            onOpenChat={() => setSidebarTab("chat")}
-            onOpenParticipants={() => setSidebarTab("participants")}
+            onOpenChat={() => {
+              setSidebarTab("chat");
+              setMobileSidebarOpen(true);
+              setMobileSideNavOpen(false);
+            }}
+            onOpenParticipants={() => {
+              setSidebarTab("participants");
+              setMobileSidebarOpen(true);
+              setMobileSideNavOpen(false);
+            }}
+            onOpenMore={() => {
+              setMobileSideNavOpen(true);
+              setMobileSidebarOpen(false);
+            }}
           />
         </div>
       </div>
