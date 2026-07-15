@@ -3,6 +3,7 @@ import { useAuth } from "./auth/AuthProvider";
 import { HomePage } from "./features/home/HomePage";
 import { RoomPage } from "./features/room/RoomPage";
 import { RecordingsPage } from "./features/recordings/RecordingsPage";
+import { AllRecordingsPage } from "./features/recordings/AllRecordingsPage";
 import { AttendancePage } from "./features/attendance/AttendancePage";
 import { AdminUsersPage } from "./features/admin/AdminUsersPage";
 import { EgressRoomView } from "./features/egress/EgressRoomView";
@@ -34,6 +35,14 @@ export function App() {
         element={
           <ProtectedRoute>
             <RoomPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/recordings"
+        element={
+          <ProtectedRoute>
+            <AllRecordingsPage />
           </ProtectedRoute>
         }
       />

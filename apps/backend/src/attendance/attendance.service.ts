@@ -1,6 +1,7 @@
 import { Injectable } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
-import { AttendanceDto } from "@webinairev2/shared-types";
+import { AttendanceRecord } from "@prisma/client";
+import { AttendanceDto, AttendanceSessionGroupDto } from "@webinairev2/shared-types";
 
 // L'egress Web (voir livekit-token.service.ts createRecorderToken) se connecte
 // aussi à la Room comme un participant LiveKit — jamais un vrai utilisateur, ne
@@ -24,8 +25,14 @@ export class AttendanceService {
     const room = await this.prisma.room.findUnique({ where: { roomName } });
     if (!room) return;
 
+    // room.startedAt est déjà à jour à ce stade : le webhook met la Room à LIVE
+    // (et fixe startedAt) avant d'appeler recordJoin, que ce soit via l'événement
+    // room_started ou le repli participant_joined. Filet défensif au cas où
+    // startedAt serait malgré tout absent (ne devrait pas arriver en pratique).
+    const sessionStartedAt = room.startedAt ?? joinedAt;
+
     await this.prisma.attendanceRecord.create({
-      data: { roomId: room.id, identity, name, isModerator, joinedAt },
+      data: { roomId: room.id, identity, name, isModerator, joinedAt, sessionStartedAt },
     });
   }
 
@@ -46,13 +53,57 @@ export class AttendanceService {
     await this.prisma.attendanceRecord.update({ where: { id: open.id }, data: { leftAt } });
   }
 
-  async list(roomId: string): Promise<AttendanceDto[]> {
+  // Regroupe la présence par session (un cycle démarrage → fin de la salle,
+  // voir sessionStartedAt sur AttendanceRecord) — une Room étant réutilisable,
+  // deux réunions distinctes tenues dans la même salle ne doivent jamais
+  // apparaître mélangées dans une seule liste. La plus récente en premier.
+  async list(roomId: string): Promise<AttendanceSessionGroupDto[]> {
+    const room = await this.prisma.room.findUnique({ where: { id: roomId }, select: { title: true } });
+
     const records = await this.prisma.attendanceRecord.findMany({
       where: { roomId },
       orderBy: { joinedAt: "asc" },
     });
 
-    const byIdentity = new Map<string, typeof records>();
+    const bySession = new Map<number, AttendanceRecord[]>();
+    for (const record of records) {
+      const key = record.sessionStartedAt.getTime();
+      const list = bySession.get(key) ?? [];
+      list.push(record);
+      bySession.set(key, list);
+    }
+
+    // Le titre de la salle rend l'identifiant lisible (ex. "TEST-…") plutôt que
+    // le seul roomId technique.
+    const sessionLabel = room?.title || roomId;
+
+    const groups: AttendanceSessionGroupDto[] = [];
+    for (const [sessionStartedAtMs, sessionRecords] of bySession) {
+      const allLeft = sessionRecords.every((r) => r.leftAt !== null);
+      const endedAt = allLeft
+        ? new Date(Math.max(...sessionRecords.map((r) => r.leftAt!.getTime())))
+        : null;
+
+      groups.push({
+        sessionId: `${sessionLabel}-${sessionStartedAtMs}`,
+        startedAt: new Date(sessionStartedAtMs).toISOString(),
+        endedAt: endedAt ? endedAt.toISOString() : null,
+        participants: this.aggregateParticipants(sessionRecords),
+      });
+    }
+
+    groups.sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime());
+    return groups;
+  }
+
+  async deleteSession(roomId: string, sessionStartedAtMs: number): Promise<void> {
+    await this.prisma.attendanceRecord.deleteMany({
+      where: { roomId, sessionStartedAt: new Date(sessionStartedAtMs) },
+    });
+  }
+
+  private aggregateParticipants(records: AttendanceRecord[]): AttendanceDto[] {
+    const byIdentity = new Map<string, AttendanceRecord[]>();
     for (const record of records) {
       const sessions = byIdentity.get(record.identity) ?? [];
       sessions.push(record);

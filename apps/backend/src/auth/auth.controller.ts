@@ -65,6 +65,16 @@ export class AuthController {
     });
 
     delete req.session.oauthState;
+
+    // Compte désactivé par un admin (voir UsersService.setActive) : on refuse la
+    // création de session ici — SessionStoreService a déjà révoqué toute session
+    // existante au moment de la désactivation, mais sans ce contrôle un compte
+    // désactivé pourrait simplement se reconnecter pour en ouvrir une nouvelle.
+    if (!user.active) {
+      res.redirect(`${this.config.get<string>("frontendUrl")}?error=account_disabled`);
+      return;
+    }
+
     req.session.idToken = tokenSet.id_token;
     req.session.user = {
       id: user.id,

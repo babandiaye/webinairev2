@@ -10,6 +10,7 @@ import { ConfigService } from "@nestjs/config";
 import { SessionUser } from "../auth/session.types";
 import { BreakoutRoomsService } from "../breakout-rooms/breakout-rooms.service";
 import { PresentationsService } from "../presentations/presentations.service";
+import { S3Service } from "../storage/s3.service";
 
 @Injectable()
 export class RoomsService {
@@ -19,7 +20,8 @@ export class RoomsService {
     private readonly livekitToken: LiveKitTokenService,
     private readonly config: ConfigService,
     private readonly breakoutRooms: BreakoutRoomsService,
-    private readonly presentations: PresentationsService
+    private readonly presentations: PresentationsService,
+    private readonly s3: S3Service
   ) {}
 
   async create(title: string, creator: SessionUser): Promise<RoomDto> {
@@ -55,9 +57,16 @@ export class RoomsService {
     const room = await this.findOneOrThrow(id);
     // Un créateur de salle (ex. enseignant Moodle jamais promu manuellement, voir
     // MoodleService.upsertTeacherByEmail) a les droits de modération sur SA salle
-    // même si son rôle global reste VIEWER — canManage côté frontend applique déjà
-    // la même règle, on l'aligne ici pour les droits LiveKit réels.
-    const isModerator = user.role === Role.ADMIN || user.role === Role.MODERATOR || room.creatorId === user.id;
+    // même si son rôle global reste VIEWER — canManage côté frontend et
+    // RoomAccessGuard appliquent déjà la même règle (ADMIN ou créateur), on
+    // l'aligne ici pour les droits LiveKit réels. Un MODERATOR global qui n'est
+    // PAS le créateur ne doit PAS recevoir isModerator/roomAdmin ici : ce grant
+    // LiveKit est protocolaire (mute/kick directs via le SDK client, hors de
+    // notre API) et échapperait sinon à RoomAccessGuard, qui lui refuse déjà
+    // ces mêmes actions à un modérateur non-créateur — un rôle global MODERATOR
+    // ne donne des droits que sur les salles qu'il crée lui-même (voir aussi
+    // breakout-rooms.service.ts, qui applique déjà cette règle stricte).
+    const isModerator = user.role === Role.ADMIN || room.creatorId === user.id;
 
     if (isModerator) {
       // Un modérateur peut toujours (re)rejoindre, y compris une salle SCHEDULED/
@@ -148,6 +157,45 @@ export class RoomsService {
     });
 
     return this.toDto(updated);
+  }
+
+  // Suppression définitive (close() ne fait que clôturer une session, la salle
+  // reste redémarrable) — refusée tant que la réunion est en direct pour éviter
+  // de couper tout le monde sans préavis explicite (fermez la réunion d'abord).
+  async remove(id: string): Promise<void> {
+    const room = await this.findOneOrThrow(id);
+    if (room.status === RoomStatus.LIVE) {
+      throw new BadRequestException("Fermez la réunion avant de la supprimer définitivement");
+    }
+
+    const breakouts = await this.prisma.room.findMany({
+      where: { parentRoomId: id, type: RoomType.BREAKOUT },
+      select: { id: true },
+    });
+    const allRoomIds = [id, ...breakouts.map((b) => b.id)];
+
+    // Purge des objets S3 (enregistrements + diapositives) avant la suppression
+    // en base : la cascade Prisma (onDelete: Cascade) supprime les lignes
+    // Recording/Presentation/AttendanceRecord/WhiteboardSnapshot/breakouts, mais
+    // jamais les fichiers S3 sous-jacents — sans ce nettoyage explicite ils
+    // resteraient orphelins dans MinIO, sans plus aucune trace en base pour les
+    // identifier après coup.
+    for (const roomId of allRoomIds) {
+      await this.presentations.deleteAllForRoom(roomId);
+
+      const recordings = await this.prisma.recording.findMany({
+        where: { roomId, s3Key: { not: "" } },
+        select: { s3Key: true },
+      });
+      for (const recording of recordings) {
+        await this.s3.deleteObject(recording.s3Key).catch(() => {
+          // Objet déjà absent ou MinIO temporairement indisponible : on ne
+          // bloque pas la suppression de la salle pour un fichier orphelin.
+        });
+      }
+    }
+
+    await this.prisma.room.delete({ where: { id } });
   }
 
   // Coupe uniquement le micro (pas la caméra) : c'est le cas d'usage modérateur

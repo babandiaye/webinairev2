@@ -40,6 +40,32 @@ export interface UserDto {
   role: Role;
 }
 
+// Variante utilisée par la page d'administration (liste/désactivation/suppression) —
+// UserDto reste inchangé pour /users/me (reflet de SessionUser, pas de requête
+// supplémentaire justifiée juste pour afficher son propre statut/compteur).
+export interface AdminUserDto extends UserDto {
+  active: boolean;
+  // Nombre de salles créées par cet utilisateur — affiché avant une suppression :
+  // l'API la refuse tant que ce compteur n'est pas à 0 (contrainte FK Room.creatorId).
+  roomCount: number;
+}
+
+// keycloakId volontairement absent : un compte créé manuellement n'a pas encore
+// de vraie identité Keycloak, il adopte un placeholder "pending:" (même mécanisme
+// que MoodleService pour les enseignants) — la première connexion réelle de cet
+// email l'associe à cette ligne, voir UserSyncService.syncFromKeycloak.
+export interface CreateUserDto {
+  email: string;
+  name: string;
+  role: Role;
+}
+
+export interface CsvImportSummaryDto {
+  total: number;
+  created: number;
+  skipped: number;
+}
+
 export interface RecordingDto {
   id: string;
   roomId: string;
@@ -49,6 +75,14 @@ export interface RecordingDto {
   status: RecordingStatus;
   startedAt: string | null;
   createdAt: string;
+}
+
+// Variante utilisée par la page d'administration globale (toutes salles
+// confondues) — RecordingDto reste inchangé pour la page par salle, qui n'a pas
+// besoin de répéter le titre de SA propre salle sur chaque ligne.
+export interface RecordingWithRoomDto extends RecordingDto {
+  roomTitle: string;
+  roomName: string;
 }
 
 export interface DownloadLinkDto {
@@ -184,4 +218,15 @@ export interface AttendanceDto {
   firstJoinedAt: string;
   lastLeftAt: string | null; // null si encore connecté
   sessions: AttendanceSessionDto[];
+}
+
+// Un groupe = une session de la salle (un cycle démarrage → fin), identifié par
+// "{roomId}-{sessionStartedAt en ms}" — une Room étant réutilisable (redémarrage
+// après clôture), la présence de plusieurs réunions distinctes tenues dans la
+// même salle ne doit jamais apparaître mélangée dans une seule liste.
+export interface AttendanceSessionGroupDto {
+  sessionId: string;
+  startedAt: string;
+  endedAt: string | null; // null tant qu'au moins un participant est encore connecté
+  participants: AttendanceDto[];
 }

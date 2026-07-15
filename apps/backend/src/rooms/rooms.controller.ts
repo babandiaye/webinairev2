@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, UseGuards } from "@nestjs/common";
+import { Body, Controller, Delete, Get, HttpCode, Param, Post, UseGuards } from "@nestjs/common";
 import { Role } from "@prisma/client";
 import { SessionAuthGuard } from "../auth/session-auth.guard";
 import { RolesGuard } from "../auth/roles.guard";
@@ -35,6 +35,13 @@ export class RoomsController {
   @RequireRoomAccess()
   close(@Param("id") id: string) {
     return this.rooms.close(id);
+  }
+
+  @Delete(":id")
+  @RequireRoomAccess()
+  @HttpCode(204)
+  remove(@Param("id") id: string): Promise<void> {
+    return this.rooms.remove(id);
   }
 
   @Post(":id/participants/:identity/mute")

@@ -1,26 +1,29 @@
 import { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Download, Play, Trash2, X } from "lucide-react";
-import { RecordingDto } from "@webinairev2/shared-types";
+import { Navigate } from "react-router-dom";
+import { Download, Play, Trash2, X } from "lucide-react";
+import { RecordingWithRoomDto } from "@webinairev2/shared-types";
 import { api, API_URL } from "../../api/client";
 import { useAuth } from "../../auth/AuthProvider";
 import { DashboardLayout } from "../../components/layout/DashboardLayout";
 import { formatDuration, formatSize, STATUS_BADGE_CLASS, STATUS_LABELS } from "./recording-format";
 
-export function RecordingsPage() {
-  const { id } = useParams<{ id: string }>();
+// Vue globale (toutes salles confondues), réservée ADMIN — RecordingsPage reste
+// la vue par salle (créateur ou admin), accessible depuis le tableau de bord.
+export function AllRecordingsPage() {
   const { user } = useAuth();
-  const navigate = useNavigate();
   const [search, setSearch] = useState("");
-  const [recordings, setRecordings] = useState<RecordingDto[]>([]);
+  const [recordings, setRecordings] = useState<RecordingWithRoomDto[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [playbackUrl, setPlaybackUrl] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!id) return;
-    api.listRecordings(id).then(setRecordings).catch((e) => setError(e.message));
-  }, [id]);
+    if (user?.role !== "ADMIN") return;
+    api.listAllRecordings().then(setRecordings).catch((e) => setError(e.message));
+  }, [user]);
+
+  if (!user) return null;
+  if (user.role !== "ADMIN") return <Navigate to="/" replace />;
 
   async function handleDownload(recordingId: string) {
     try {
@@ -40,13 +43,12 @@ export function RecordingsPage() {
     }
   }
 
-  async function handleDelete(recordingId: string) {
-    if (!id) return;
-    if (!window.confirm("Supprimer définitivement cet enregistrement ?")) return;
-    setBusyId(recordingId);
+  async function handleDelete(rec: RecordingWithRoomDto) {
+    if (!window.confirm(`Supprimer définitivement l'enregistrement de "${rec.roomTitle}" ?`)) return;
+    setBusyId(rec.id);
     try {
-      await api.deleteRecording(id, recordingId);
-      setRecordings((prev) => prev.filter((r) => r.id !== recordingId));
+      await api.deleteRecording(rec.roomId, rec.id);
+      setRecordings((prev) => prev.filter((r) => r.id !== rec.id));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Erreur inconnue");
     } finally {
@@ -54,34 +56,33 @@ export function RecordingsPage() {
     }
   }
 
-  if (!user) return null;
+  const filtered = recordings.filter(
+    (r) =>
+      r.roomTitle.toLowerCase().includes(search.toLowerCase()) ||
+      r.filename.toLowerCase().includes(search.toLowerCase())
+  );
 
   return (
     <DashboardLayout user={user} search={search} onSearchChange={setSearch}>
-      <button className="back-link" onClick={() => navigate("/")}>
-        <ArrowLeft size={15} />
-        Retour au tableau de bord
-      </button>
-
       <div className="dashboard-welcome">
         <h2>Enregistrements</h2>
-        <p>Enregistrements liés à cette salle.</p>
+        <p>Tous les enregistrements, toutes salles confondues.</p>
       </div>
 
       {error && <div className="error-banner">{error}</div>}
 
       <div className="panel" style={{ marginTop: 20 }}>
-        {recordings.length === 0 ? (
-          <p className="empty-state">Aucun enregistrement pour cette salle.</p>
+        {filtered.length === 0 ? (
+          <p className="empty-state">Aucun enregistrement ne correspond.</p>
         ) : (
           <div className="recordings-list">
-            {recordings.map((rec) => (
+            {filtered.map((rec) => (
               <div className="recording-row" key={rec.id}>
                 <div className="recording-info">
-                  <p className="recording-title">{rec.filename || "Enregistrement en cours…"}</p>
+                  <p className="recording-title">{rec.roomTitle}</p>
                   <span className="recording-sub">
-                    {formatDuration(rec.duration)} · {formatSize(rec.size)} ·{" "}
-                    {new Date(rec.createdAt).toLocaleString("fr-FR")}
+                    {rec.filename || "Enregistrement en cours…"} · {formatDuration(rec.duration)} ·{" "}
+                    {formatSize(rec.size)} · {new Date(rec.createdAt).toLocaleString("fr-FR")}
                   </span>
                 </div>
                 <span className={`status-badge status-${STATUS_BADGE_CLASS[rec.status]}`}>
@@ -97,11 +98,7 @@ export function RecordingsPage() {
                       <Download size={15} />
                       Télécharger
                     </button>
-                    <button
-                      className="btn btn-danger"
-                      onClick={() => handleDelete(rec.id)}
-                      disabled={busyId === rec.id}
-                    >
+                    <button className="btn btn-danger" onClick={() => handleDelete(rec)} disabled={busyId === rec.id}>
                       <Trash2 size={15} />
                     </button>
                   </div>

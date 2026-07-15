@@ -51,6 +51,11 @@ model User {
   email        String   @unique
   name         String
   role         Role     @default(VIEWER)
+  // Désactivation par un admin (auth.controller.ts refuse le callback OAuth, et
+  // toute session Redis déjà ouverte est révoquée immédiatement — voir
+  // UsersService.setActive) — jamais un hard delete tant que l'utilisateur a des
+  // salles créées (contrainte FK sur Room.creatorId).
+  active       Boolean  @default(true)
   createdRooms Room[]
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
@@ -194,9 +199,17 @@ model AttendanceRecord {
   isModerator Boolean   @default(false)
   joinedAt    DateTime
   leftAt      DateTime?
+  // Horodatage Room.startedAt au moment de la connexion — une Room est réutilisable
+  // (voir RoomsService.join : redémarrer une salle ENDED la repasse SCHEDULED puis
+  // LIVE), donc roomId seul ne distingue pas deux sessions successives. La liste de
+  // présence (AttendanceService.list) ne montre que les lignes dont sessionStartedAt
+  // correspond au startedAt courant de la Room, pour ne jamais mélanger la présence
+  // de plusieurs réunions distinctes tenues dans la même salle.
+  sessionStartedAt DateTime
 
   @@index([roomId])
   @@index([roomId, identity])
+  @@index([roomId, sessionStartedAt])
   @@map("attendance_records")
 }
 

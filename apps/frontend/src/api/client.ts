@@ -1,10 +1,13 @@
 import type {
+  AdminUserDto,
   AssignBreakoutDto,
-  AttendanceDto,
+  AttendanceSessionGroupDto,
   BreakoutRoomDto,
   CreateBreakoutRoomsDto,
   CreatePollDto,
   CreateRoomDto,
+  CreateUserDto,
+  CsvImportSummaryDto,
   DownloadLinkDto,
   JoinRoomResponseDto,
   MyBreakoutAssignmentDto,
@@ -12,6 +15,7 @@ import type {
   PollDto,
   PresentationDto,
   RecordingDto,
+  RecordingWithRoomDto,
   RoomDto,
   SetCurrentSlideDto,
   UpdateRoleDto,
@@ -51,6 +55,7 @@ export const api = {
     request<RoomDto>("/rooms", { method: "POST", body: JSON.stringify(dto) }),
   joinRoom: (roomId: string) => request<JoinRoomResponseDto>(`/rooms/${roomId}/join`, { method: "POST" }),
   closeRoom: (roomId: string) => request<RoomDto>(`/rooms/${roomId}/close`, { method: "POST" }),
+  deleteRoom: (roomId: string) => request<void>(`/rooms/${roomId}`, { method: "DELETE" }),
   muteParticipant: (roomId: string, identity: string) =>
     request<{ ok: true }>(`/rooms/${roomId}/participants/${encodeURIComponent(identity)}/mute`, { method: "POST" }),
   removeParticipant: (roomId: string, identity: string) =>
@@ -78,12 +83,36 @@ export const api = {
     request<DownloadLinkDto>(`/recordings/${recordingId}/url`),
   deleteRecording: (roomId: string, recordingId: string) =>
     request<void>(`/rooms/${roomId}/recordings/${recordingId}`, { method: "DELETE" }),
+  listAllRecordings: () => request<RecordingWithRoomDto[]>("/recordings"),
 
-  listAttendance: (roomId: string) => request<AttendanceDto[]>(`/rooms/${roomId}/attendance`),
+  listAttendance: (roomId: string) => request<AttendanceSessionGroupDto[]>(`/rooms/${roomId}/attendance`),
+  deleteAttendanceSession: (roomId: string, startedAtMs: number) =>
+    request<void>(`/rooms/${roomId}/attendance/sessions/${startedAtMs}`, { method: "DELETE" }),
 
-  listUsers: () => request<UserDto[]>("/users"),
+  listUsers: () => request<AdminUserDto[]>("/users"),
+  createUser: (dto: CreateUserDto) =>
+    request<AdminUserDto>("/users", { method: "POST", body: JSON.stringify(dto) }),
   updateUserRole: (userId: string, dto: UpdateRoleDto) =>
-    request<UserDto>(`/users/${userId}/role`, { method: "PATCH", body: JSON.stringify(dto) }),
+    request<AdminUserDto>(`/users/${userId}/role`, { method: "PATCH", body: JSON.stringify(dto) }),
+  setUserActive: (userId: string, active: boolean) =>
+    request<AdminUserDto>(`/users/${userId}/active`, { method: "PATCH", body: JSON.stringify({ active }) }),
+  deleteUser: (userId: string) => request<void>(`/users/${userId}`, { method: "DELETE" }),
+  csvTemplateUrl: `${API_URL}/users/csv-template`,
+  async importUsersCsv(file: File): Promise<CsvImportSummaryDto> {
+    const form = new FormData();
+    form.append("file", file);
+    // Pas de Content-Type manuel : le navigateur doit fixer la boundary multipart.
+    const res = await fetch(`${API_URL}/users/import-csv`, {
+      method: "POST",
+      credentials: "include",
+      body: form,
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => null);
+      throw new Error(body?.message || `Import échoué (${res.status})`);
+    }
+    return res.json();
+  },
 
   listBreakoutRooms: (roomId: string) => request<BreakoutRoomDto[]>(`/rooms/${roomId}/breakouts`),
   myBreakoutAssignment: (roomId: string) =>

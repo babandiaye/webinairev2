@@ -1,4 +1,4 @@
-import { Controller, Get, Param, UseGuards } from "@nestjs/common";
+import { BadRequestException, Controller, Delete, Get, HttpCode, Param, UseGuards } from "@nestjs/common";
 import { SessionAuthGuard } from "../auth/session-auth.guard";
 import { RolesGuard } from "../auth/roles.guard";
 import { RoomAccessGuard, RequireRoomAccess } from "../rooms/room-access.guard";
@@ -16,5 +16,17 @@ export class AttendanceController {
   @RequireRoomAccess()
   list(@Param("roomId") roomId: string) {
     return this.attendance.list(roomId);
+  }
+
+  @Delete("sessions/:startedAtMs")
+  @RequireRoomAccess()
+  @HttpCode(204)
+  deleteSession(
+    @Param("roomId") roomId: string,
+    @Param("startedAtMs") startedAtMs: string
+  ): Promise<void> {
+    const ms = Number(startedAtMs);
+    if (!Number.isFinite(ms)) throw new BadRequestException("Horodatage de session invalide");
+    return this.attendance.deleteSession(roomId, ms);
   }
 }

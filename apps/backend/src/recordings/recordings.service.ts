@@ -6,11 +6,16 @@ import { PrismaService } from "../prisma/prisma.service";
 import { LiveKitClientsService } from "../livekit/livekit-clients.service";
 import { S3Service } from "../storage/s3.service";
 import { SessionUser } from "../auth/session.types";
-import { DownloadLinkDto, RecordingDto } from "@webinairev2/shared-types";
+import { DownloadLinkDto, RecordingDto, RecordingWithRoomDto } from "@webinairev2/shared-types";
 import { signDownloadToken } from "../common/download-token.util";
 
 const DOWNLOAD_LINK_TTL_SECONDS = 5 * 60;
-const EGRESS_TOKEN_TTL_SECONDS = 12 * 60 * 60;
+// Doit couvrir la durée max réaliste d'une session (le token reste valide tout
+// le long, polling whiteboard/présentation inclus) sans excéder ce qui est
+// nécessaire — 12h laissait un token valable bien après la fin de tout cours en
+// cas de fuite (URL relayée dans les logs nginx/egress, cf. commentaire sur
+// egressUrl plus bas).
+const EGRESS_TOKEN_TTL_SECONDS = 4 * 60 * 60;
 
 // Un enregistrement traverse STARTING (requête envoyée à LiveKit, egress pas
 // encore confirmé actif) -> ACTIVE (confirmé par webhook egress_active) ->
@@ -71,7 +76,14 @@ export class RecordingsService {
       { resourceId: roomId, exp },
       this.config.get<string>("secrets.downloadLink")!
     );
-    const egressUrl = `${this.config.get<string>("frontendUrl")}/egress-view/${roomId}?token=${encodeURIComponent(egressToken)}`;
+    // Token dans le FRAGMENT (#), pas en query string : le fragment n'est jamais
+    // envoyé au serveur par le navigateur, donc n'apparaît ni dans les logs
+    // d'accès nginx ni dans une éventuelle capture réseau côté proxy — seule la
+    // requête GET initiale du Chrome headless vers cette URL existe forcément
+    // (LiveKit Web Egress ne permet pas d'y joindre un en-tête personnalisé) ;
+    // tous les appels API suivants (join, whiteboard, présentation) transmettent
+    // le token via l'en-tête X-Egress-Token à la place (voir egressApi.ts).
+    const egressUrl = `${this.config.get<string>("frontendUrl")}/egress-view/${roomId}#token=${encodeURIComponent(egressToken)}`;
 
     const egressInfo = await this.livekitClients.egressClient.startWebEgress(egressUrl, output, {
       encodingOptions: EncodingOptionsPreset.H264_1080P_30,
@@ -117,6 +129,17 @@ export class RecordingsService {
       orderBy: { createdAt: "desc" },
     });
     return recordings.map((r) => this.toDto(r));
+  }
+
+  // Toutes salles confondues — page d'administration globale (voir RecordingsController,
+  // ADMIN uniquement : list()/RoomRecordingsController couvre déjà l'usage par salle,
+  // ouvert au créateur, ce qui suffit hors contexte d'administration).
+  async listAll(): Promise<RecordingWithRoomDto[]> {
+    const recordings = await this.prisma.recording.findMany({
+      orderBy: { createdAt: "desc" },
+      include: { room: { select: { title: true, roomName: true } } },
+    });
+    return recordings.map((r) => ({ ...this.toDto(r), roomTitle: r.room.title, roomName: r.room.roomName }));
   }
 
   // Jamais d'URL/clé S3 exposée directement — un lien signé HMAC de courte durée,

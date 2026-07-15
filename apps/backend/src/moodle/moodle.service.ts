@@ -5,6 +5,7 @@ import { RecordingStatus, Role } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
 import { LiveKitClientsService } from "../livekit/livekit-clients.service";
 import { RecordingsService } from "../recordings/recordings.service";
+import { UsersService } from "../users/users.service";
 import { signDownloadToken } from "../common/download-token.util";
 import { MoodleRecordingDto, MoodleRoomDto, MoodleRoomStatusDto } from "@webinairev2/shared-types";
 import { CreateMoodleRoomDto } from "./dto/create-moodle-room.dto";
@@ -21,26 +22,9 @@ export class MoodleService {
     private readonly prisma: PrismaService,
     private readonly livekitClients: LiveKitClientsService,
     private readonly recordings: RecordingsService,
+    private readonly users: UsersService,
     private readonly config: ConfigService
   ) {}
-
-  // Un enseignant Moodle peut ne s'être jamais connecté à webinairev2 au moment où
-  // Moodle crée l'activité côté serveur (pas de session Keycloak disponible ici).
-  // On le référence par email avec un keycloakId placeholder distinctif ; sa vraie
-  // connexion Keycloak adoptera cette même ligne (voir UserSyncService.syncFromKeycloak)
-  // au lieu d'en créer une seconde en conflit sur la contrainte unique email.
-  private async upsertTeacherByEmail(email: string, name: string): Promise<{ id: string }> {
-    const existing = await this.prisma.user.findUnique({ where: { email } });
-    if (existing) return existing;
-    return this.prisma.user.create({
-      data: {
-        email,
-        name,
-        keycloakId: `pending:${randomUUID()}`,
-        role: Role.VIEWER,
-      },
-    });
-  }
 
   async createOrGetRoom(dto: CreateMoodleRoomDto): Promise<MoodleRoomDto> {
     const existing = await this.prisma.room.findUnique({ where: { moodleMeetingId: dto.meetingId } });
@@ -56,7 +40,10 @@ export class MoodleService {
       };
     }
 
-    const teacher = await this.upsertTeacherByEmail(dto.teacherEmail, dto.teacherName);
+    // Un enseignant Moodle peut ne s'être jamais connecté à webinairev2 au moment où
+    // Moodle crée l'activité côté serveur (pas de session Keycloak disponible ici) —
+    // voir UsersService.createOrGetPendingByEmail pour le mécanisme de placeholder.
+    const teacher = await this.users.createOrGetPendingByEmail(dto.teacherEmail, dto.teacherName, Role.VIEWER);
     const roomName = `webinairev2-moodle-${randomUUID()}`;
 
     await this.livekitClients.roomService.createRoom({ name: roomName, emptyTimeout: 300 });

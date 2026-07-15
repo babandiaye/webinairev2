@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { CalendarPlus, CalendarClock, Radio, CheckCircle2, DoorOpen, Users, Mail, Video, ClipboardList } from "lucide-react";
+import { CalendarPlus, CalendarClock, Radio, CheckCircle2, DoorOpen, Users, Video, ClipboardList, Trash2, UserCog } from "lucide-react";
 import { RoomDto } from "@webinairev2/shared-types";
 import { useAuth } from "../../auth/AuthProvider";
 import { api } from "../../api/client";
@@ -14,14 +14,68 @@ export function HomePage() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [rooms, setRooms] = useState<RoomDto[]>([]);
+  // Comptes plateforme, réservés à l'admin (endpoints /users et /recordings
+  // globaux gardés ADMIN côté backend — inutile de les appeler sinon).
+  const [userCount, setUserCount] = useState<number | null>(null);
+  const [recordingCount, setRecordingCount] = useState<number | null>(null);
   const [search, setSearch] = useState("");
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [title, setTitle] = useState("");
   const [error, setError] = useState<string | null>(null);
 
+  const isAdmin = user?.role === "ADMIN";
+
   useEffect(() => {
-    api.listRooms().then(setRooms).catch((e) => setError(e.message));
-  }, []);
+    let cancelled = false;
+
+    function load() {
+      api
+        .listRooms()
+        .then((data) => {
+          if (!cancelled) setRooms(data);
+        })
+        .catch((e) => {
+          if (!cancelled) setError(e instanceof Error ? e.message : "Erreur inconnue");
+        });
+
+      if (isAdmin) {
+        api
+          .listUsers()
+          .then((data) => {
+            if (!cancelled) setUserCount(data.length);
+          })
+          .catch(() => {});
+        api
+          .listAllRecordings()
+          .then((data) => {
+            if (!cancelled) setRecordingCount(data.length);
+          })
+          .catch(() => {});
+      }
+    }
+
+    load();
+    // Sans ce polling, le statut d'une salle (ex. passage LIVE → ENDED côté
+    // webhook LiveKit) resterait figé sur le tableau de bord tant que la page
+    // n'est pas rechargée manuellement.
+    const interval = setInterval(load, 15000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [isAdmin]);
+
+  async function handleDeleteRoom(room: RoomDto) {
+    if (!confirm(`Supprimer définitivement la salle "${room.title}" ? Les enregistrements associés seront aussi supprimés.`))
+      return;
+    setError(null);
+    try {
+      await api.deleteRoom(room.id);
+      setRooms((prev) => prev.filter((r) => r.id !== room.id));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erreur inconnue");
+    }
+  }
 
   async function handleCreate(e: FormEvent) {
     e.preventDefault();
@@ -63,9 +117,27 @@ export function HomePage() {
 
       <div className="stat-grid">
         <StatCard label="Salles totales" value={stats.total} icon={DoorOpen} color="#2563eb" />
-        <StatCard label="En direct" value={stats.live} icon={Radio} color="#dc2626" />
+        <StatCard label="En direct" value={stats.live} icon={Radio} color="#dc2626" pulse />
         <StatCard label="Programmées" value={stats.scheduled} icon={CalendarClock} color="#d97706" />
         <StatCard label="Terminées" value={stats.ended} icon={CheckCircle2} color="#15803d" />
+        {isAdmin && userCount !== null && (
+          <StatCard
+            label="Utilisateurs"
+            value={userCount}
+            icon={Users}
+            color="#7c3aed"
+            onClick={() => navigate("/admin/users")}
+          />
+        )}
+        {isAdmin && recordingCount !== null && (
+          <StatCard
+            label="Enregistrements"
+            value={recordingCount}
+            icon={Video}
+            color="#0891b2"
+            onClick={() => navigate("/recordings")}
+          />
+        )}
       </div>
 
       {error && <div className="error-banner">{error}</div>}
@@ -109,6 +181,15 @@ export function HomePage() {
                           {room.status === "ENDED" ? "Redémarrer" : "Rejoindre"}
                         </button>
                       )}
+                      {(user.role === "ADMIN" || user.id === room.creatorId) && room.status !== "LIVE" && (
+                        <button
+                          className="btn btn-ghost"
+                          title="Supprimer définitivement"
+                          onClick={() => handleDeleteRoom(room)}
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      )}
                     </div>
                   </div>
                 );
@@ -117,52 +198,48 @@ export function HomePage() {
           )}
         </div>
 
-        <div className="panel">
-          <div className="panel-header">
-            <h3>Actions rapides</h3>
-          </div>
+        {(canCreateRoom || isAdmin) && (
+          <div className="panel">
+            <div className="panel-header">
+              <h3>Actions rapides</h3>
+            </div>
 
-          {canCreateRoom && showCreateForm && (
-            <form className="create-room-form" onSubmit={handleCreate}>
-              <input
-                autoFocus
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="Titre de la salle"
-              />
-              <button className="btn btn-primary" type="submit" disabled={!title.trim()}>
-                Créer
-              </button>
-            </form>
-          )}
-
-          <div className="quick-actions">
-            {canCreateRoom && (
-              <button
-                className="quick-action-btn"
-                onClick={() => setShowCreateForm((v) => !v)}
-              >
-                <CalendarPlus size={16} />
-                Planifier une réunion
-              </button>
+            {canCreateRoom && showCreateForm && (
+              <form className="create-room-form" onSubmit={handleCreate}>
+                <input
+                  autoFocus
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="Titre de la salle"
+                />
+                <button className="btn btn-primary" type="submit" disabled={!title.trim()}>
+                  Créer
+                </button>
+              </form>
             )}
-            <button className="quick-action-btn disabled" disabled>
-              <DoorOpen size={16} />
-              Créer une salle permanente
-              <span className="soon-badge">Bientôt</span>
-            </button>
-            <button className="quick-action-btn disabled" disabled>
-              <Users size={16} />
-              Importer des utilisateurs
-              <span className="soon-badge">Bientôt</span>
-            </button>
-            <button className="quick-action-btn disabled" disabled>
-              <Mail size={16} />
-              Gérer les invitations
-              <span className="soon-badge">Bientôt</span>
-            </button>
+
+            <div className="quick-actions">
+              {canCreateRoom && (
+                <button className="quick-action-btn" onClick={() => setShowCreateForm((v) => !v)}>
+                  <CalendarPlus size={16} />
+                  Planifier une réunion
+                </button>
+              )}
+              {isAdmin && (
+                <button className="quick-action-btn" onClick={() => navigate("/admin/users")}>
+                  <UserCog size={16} />
+                  Gérer les utilisateurs
+                </button>
+              )}
+              {isAdmin && (
+                <button className="quick-action-btn" onClick={() => navigate("/recordings")}>
+                  <Video size={16} />
+                  Tous les enregistrements
+                </button>
+              )}
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       <p className="dashboard-footer">© {new Date().getFullYear()} Webinaire — Une solution UNCHK</p>

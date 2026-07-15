@@ -153,6 +153,14 @@ body {
   margin-bottom: 20px;
   font-size: 0.9rem;
 }
+.info-banner {
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+  border-radius: 8px;
+  padding: 10px 16px;
+  margin-bottom: 20px;
+  font-size: 0.9rem;
+}
 
 .loading-screen {
   display: flex;
@@ -237,6 +245,22 @@ body {
   display: flex;
   flex-direction: column;
 }
+.sidebar-backdrop {
+  display: none;
+}
+.menu-toggle {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text);
+  cursor: pointer;
+  flex-shrink: 0;
+}
 
 .sidebar-header {
   display: flex;
@@ -297,28 +321,13 @@ body {
   text-align: left;
   font-family: inherit;
 }
-.nav-item:hover:not(.disabled) {
+.nav-item:hover {
   background: var(--color-bg);
 }
 .nav-item.active {
   background: var(--color-primary-soft);
   color: var(--color-primary);
   font-weight: 600;
-}
-.nav-item.disabled {
-  color: var(--color-text-muted);
-  cursor: default;
-}
-.nav-item .soon-badge {
-  margin-left: auto;
-  font-size: 0.62rem;
-  font-weight: 700;
-  background: var(--color-bg);
-  border: 1px solid var(--color-border);
-  color: var(--color-text-muted);
-  padding: 2px 7px;
-  border-radius: 999px;
-  text-transform: uppercase;
 }
 
 .sidebar-footer {
@@ -490,9 +499,21 @@ body {
 .stat-card {
   background: var(--color-surface);
   border: 1px solid var(--color-border);
+  border-top-width: 3px;
   border-radius: var(--radius);
   box-shadow: var(--shadow);
   padding: 18px 20px;
+  width: 100%;
+  text-align: left;
+  font-family: inherit;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+button.stat-card {
+  cursor: pointer;
+}
+button.stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px -8px rgba(0, 0, 0, 0.25);
 }
 .stat-card-top {
   display: flex;
@@ -506,17 +527,27 @@ body {
   font-weight: 600;
 }
 .stat-card-icon {
-  width: 36px;
-  height: 36px;
-  border-radius: 9px;
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
 }
 .stat-card-value {
-  font-size: 1.7rem;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 1.85rem;
   font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.stat-card-pulse-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  animation: pulse 1.5s ease-in-out infinite;
 }
 
 /* Grille panneaux */
@@ -529,6 +560,87 @@ body {
 @media (max-width: 900px) {
   .dashboard-grid {
     grid-template-columns: 1fr;
+  }
+
+  /* Sidebar en tiroir superposé plutôt que colonne permanente — sur un écran
+     étroit, 264px fixes ne laisseraient quasi aucune place au contenu. */
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    z-index: 60;
+    transform: translateX(-100%);
+    transition: transform 0.2s ease;
+  }
+  .sidebar.open {
+    transform: translateX(0);
+  }
+  .sidebar-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    background: rgba(0, 0, 0, 0.5);
+  }
+  .menu-toggle {
+    display: flex;
+  }
+}
+
+@media (max-width: 640px) {
+  .topbar {
+    padding: 0 14px;
+    gap: 10px;
+  }
+  .topbar-user-info {
+    display: none;
+  }
+  .dashboard-content {
+    padding: 18px 14px 40px;
+  }
+  .stat-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  /* Rangées type tableau (réunions/utilisateurs/enregistrements) : le bloc
+     d'actions passe sous l'information plutôt que de déborder horizontalement. */
+  .meeting-row,
+  .user-row,
+  .recording-row,
+  .attendance-row {
+    flex-wrap: wrap;
+    row-gap: 10px;
+  }
+  .meeting-actions,
+  .user-controls,
+  .recording-actions {
+    width: 100%;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+  }
+  /* .attendance-row n'a pas de conteneur d'actions dédié : forcer l'info à
+     100% pousse la durée/les boutons qui suivent sur leur propre ligne. */
+  .attendance-info {
+    flex-basis: 100%;
+  }
+
+  .create-room-form {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .panel-header {
+    flex-wrap: wrap;
+    row-gap: 10px;
+  }
+  .panel-header-actions {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+  .attendance-pagination {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
   }
 }
 
@@ -544,6 +656,11 @@ body {
   align-items: center;
   justify-content: space-between;
   margin-bottom: 14px;
+}
+.panel-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 .panel-header h3 {
   margin: 0;
@@ -569,24 +686,9 @@ body {
   text-align: left;
   font-family: inherit;
 }
-.quick-action-btn:hover:not(.disabled) {
+.quick-action-btn:hover {
   background: var(--color-bg);
   border-color: var(--color-primary);
-}
-.quick-action-btn.disabled {
-  opacity: 0.55;
-  cursor: default;
-}
-.quick-action-btn .soon-badge {
-  margin-left: auto;
-  font-size: 0.62rem;
-  font-weight: 700;
-  background: var(--color-bg);
-  border: 1px solid var(--color-border);
-  color: var(--color-text-muted);
-  padding: 2px 7px;
-  border-radius: 999px;
-  text-transform: uppercase;
 }
 
 /* Formulaire création de salle (dépliable depuis l'action rapide) */
@@ -1493,6 +1595,28 @@ body {
   color: var(--color-text-muted);
   padding-left: 4px;
 }
+.attendance-session-detail {
+  padding: 0 4px 13px 4px;
+}
+.attendance-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding-top: 10px;
+  margin-top: 6px;
+  border-top: 1px solid var(--color-border);
+}
+.attendance-pagination-info {
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+.attendance-pagination-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
 
 .video-modal-backdrop {
   position: fixed;
@@ -1561,6 +1685,9 @@ body {
 .user-row:last-child {
   border-bottom: none;
 }
+.user-row-inactive {
+  opacity: 0.55;
+}
 .user-info {
   flex: 1;
   min-width: 0;
@@ -1582,6 +1709,30 @@ body {
 .user-email {
   font-size: 0.78rem;
   color: var(--color-text-muted);
+}
+.user-inactive-tag {
+  margin-left: 8px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--color-danger);
+}
+.user-room-count {
+  display: block;
+  font-size: 0.72rem;
+  color: var(--color-text-muted);
+}
+.user-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+.user-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
 }
 .role-badge {
   display: inline-flex;

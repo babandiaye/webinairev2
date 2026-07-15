@@ -5,9 +5,8 @@ export type CallPanel = "breakout" | "whiteboard" | "polls" | "presentations";
 // Rail persistant remplaçant l'ancien menu "..." en popup — accès direct aux
 // fonctionnalités de la salle, toujours visible plutôt que caché derrière un clic.
 // Volontairement limité aux fonctionnalités propres à CETTE salle (pas de lien
-// vers le tableau de bord/utilisateurs global : la plupart de ces pages n'existent
-// pas encore, cf. NAV_SECTIONS "Bientôt", et quitter l'appel depuis un clic de nav
-// qui ressemble à une navigation normale serait trompeur).
+// vers le tableau de bord/utilisateurs global : quitter l'appel depuis un clic de
+// nav qui ressemble à une navigation normale serait trompeur).
 export function CallSideNav({
   canManage,
   isInBreakout,

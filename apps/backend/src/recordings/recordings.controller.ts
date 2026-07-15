@@ -15,6 +15,7 @@ import { Response } from "express";
 import { ConfigService } from "@nestjs/config";
 import { SessionAuthGuard } from "../auth/session-auth.guard";
 import { RolesGuard } from "../auth/roles.guard";
+import { RequireRole } from "../auth/roles.decorator";
 import { CurrentUser } from "../auth/current-user.decorator";
 import { SessionUser } from "../auth/session.types";
 import { RoomAccessGuard, RequireRoomAccess } from "../rooms/room-access.guard";
@@ -22,7 +23,7 @@ import { RecordingsService } from "./recordings.service";
 import { PrismaService } from "../prisma/prisma.service";
 import { S3Service } from "../storage/s3.service";
 import { verifyDownloadToken } from "../common/download-token.util";
-import { RecordingStatus } from "@prisma/client";
+import { RecordingStatus, Role } from "@prisma/client";
 
 @Controller("rooms/:roomId/recordings")
 @UseGuards(SessionAuthGuard, RolesGuard, RoomAccessGuard)
@@ -62,6 +63,15 @@ export class RecordingsController {
     private readonly s3: S3Service,
     private readonly config: ConfigService
   ) {}
+
+  // Toutes salles confondues — réservé ADMIN (les modérateurs/créateurs de salle
+  // gardent leur propre vue filtrée via RoomRecordingsController.list()).
+  @Get()
+  @UseGuards(SessionAuthGuard, RolesGuard)
+  @RequireRole(Role.ADMIN)
+  listAll() {
+    return this.recordings.listAll();
+  }
 
   @Get(":id/url")
   @UseGuards(SessionAuthGuard)

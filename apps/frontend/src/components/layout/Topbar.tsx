@@ -1,4 +1,4 @@
-import { LogOut, Search } from "lucide-react";
+import { LogOut, Menu, Search } from "lucide-react";
 import { UserDto } from "@webinairev2/shared-types";
 import { initialsOf } from "../../lib/initials";
 import { useAuth } from "../../auth/AuthProvider";
@@ -13,16 +13,21 @@ export function Topbar({
   user,
   search,
   onSearchChange,
+  onMenuClick,
 }: {
   user: UserDto;
   search: string;
   onSearchChange: (v: string) => void;
+  onMenuClick: () => void;
 }) {
   const { logout } = useAuth();
   const initials = initialsOf(user.name);
 
   return (
     <header className="topbar">
+      <button className="menu-toggle" onClick={onMenuClick} aria-label="Ouvrir le menu">
+        <Menu size={20} />
+      </button>
       <div className="topbar-search">
         <Search size={16} />
         <input
