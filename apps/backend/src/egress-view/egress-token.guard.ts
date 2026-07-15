@@ -13,7 +13,11 @@ export class EgressTokenGuard implements CanActivate {
 
   canActivate(context: ExecutionContext): boolean {
     const request = context.switchToHttp().getRequest();
-    const token = request.query?.token;
+    // En-tête plutôt que query string : ces routes sont interrogées par polling
+    // (whiteboard/présentation, toutes les 4s pendant toute la session — voir
+    // egressApi.ts) ; un token en query apparaîtrait dans les logs d'accès nginx
+    // à chaque requête, potentiellement des centaines de fois par enregistrement.
+    const token = request.headers["x-egress-token"];
     if (!token) throw new UnauthorizedException("Token d'enregistrement manquant");
 
     const payload = verifyDownloadToken(token, this.config.get<string>("secrets.downloadLink")!);

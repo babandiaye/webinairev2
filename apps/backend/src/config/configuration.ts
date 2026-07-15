@@ -3,9 +3,6 @@ export default () => ({
   database: {
     url: process.env.DATABASE_URL!,
   },
-  redis: {
-    bullmqUrl: process.env.BULLMQ_REDIS_URL!,
-  },
   s3: {
     endpoint: process.env.S3_ENDPOINT!,
     accessKey: process.env.S3_ACCESS_KEY!,

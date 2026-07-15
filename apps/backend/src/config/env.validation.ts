@@ -2,7 +2,6 @@ import { z } from "zod";
 
 const envSchema = z.object({
   DATABASE_URL: z.string().min(1),
-  BULLMQ_REDIS_URL: z.string().min(1),
   S3_ENDPOINT: z.string().min(1),
   S3_ACCESS_KEY: z.string().min(1),
   S3_SECRET: z.string().min(1),

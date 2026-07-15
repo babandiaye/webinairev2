@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useParams, useSearchParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import { LiveKitRoom, RoomAudioRenderer } from "@livekit/components-react";
 import "@livekit/components-styles";
 import { EgressJoinDto } from "@webinairev2/shared-types";
@@ -14,8 +14,10 @@ import { EgressPresentationView } from "./EgressPresentationView";
 // sidebar ni aucun contrôle, exactement ce que l'enregistrement doit capturer.
 export function EgressRoomView() {
   const { id } = useParams<{ id: string }>();
-  const [searchParams] = useSearchParams();
-  const token = searchParams.get("token") ?? "";
+  // Le token voyage dans le FRAGMENT (#token=…), pas en query string : le
+  // fragment n'est jamais envoyé au serveur, donc n'apparaît pas dans les logs
+  // d'accès nginx pour cette requête initiale — voir RecordingsService.start().
+  const token = new URLSearchParams(window.location.hash.slice(1)).get("token") ?? "";
   const [connection, setConnection] = useState<EgressJoinDto | null>(null);
   const [error, setError] = useState<string | null>(null);
 

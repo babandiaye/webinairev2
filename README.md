@@ -26,8 +26,9 @@ docs/RUNBOOK.md          Détail du déploiement UNCHK (infra réutilisée, jalo
 - **Node.js 20** (LTS)
 - **pnpm 9** (`corepack enable`, le monorepo est pin sur `pnpm@9.15.0`)
 - **PostgreSQL** ≥ 14
-- **Redis** ≥ 6 (utilisé pour BullMQ — jobs de conversion de présentations — et pour
-  les sessions HTTP ; une seule instance suffit, deux index de base différents)
+- **Redis** ≥ 6 (sessions HTTP uniquement — la conversion PDF→PNG des
+  présentations tourne de façon synchrone dans le process API, pas de file de
+  jobs nécessaire)
 - **Stockage compatible S3** (MinIO ou AWS S3) avec un bucket dédié
 - **Serveur LiveKit** (SFU) avec **Egress** activé (nécessaire pour les
   enregistrements et les vues Web-Egress tableau blanc/présentation).
@@ -62,9 +63,9 @@ CREATE USER webinairev2 WITH PASSWORD 'un-mot-de-passe-fort';
 CREATE DATABASE webinairev2 OWNER webinairev2;
 ```
 
-**Redis** — aucune configuration particulière, juste noter l'URL et choisir deux
-index de base distincts (ex. `/1` pour BullMQ, `/2` pour les sessions) si
-l'instance est partagée avec d'autres usages.
+**Redis** — aucune configuration particulière, juste noter l'URL (utilisée pour
+les sessions HTTP) et choisir un index de base dédié si l'instance est
+partagée avec d'autres usages.
 
 **MinIO / S3** — créer un bucket dédié (ex. `webinairev2`) et une paire
 access key/secret avec droits lecture/écriture dessus.
@@ -114,7 +115,7 @@ immédiat si une valeur manque) :
 | Variable | Rôle |
 |---|---|
 | `DATABASE_URL` | Connexion PostgreSQL |
-| `BULLMQ_REDIS_URL` / `SESSION_REDIS_URL` | Redis — jobs présentations / sessions HTTP |
+| `SESSION_REDIS_URL` | Redis — sessions HTTP |
 | `S3_ENDPOINT`, `S3_ACCESS_KEY`, `S3_SECRET`, `S3_REGION`, `S3_BUCKET` | Stockage enregistrements/slides |
 | `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` | Auth vers le serveur LiveKit |
 | `LIVEKIT_WS_URL` | URL interne (ex. `ws://127.0.0.1:7880`), utilisée par le backend pour parler au SFU |
