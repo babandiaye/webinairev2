@@ -75,9 +75,22 @@ export class EgressReconciliationService {
       // Ne jamais faire régresser un enregistrement déjà finalisé (READY/FAILED)
       // si un webhook STARTING/ACTIVE/ENDING arrive en retard ou dans le désordre.
       if (mapped && RECORDING_IN_PROGRESS_STATUSES.includes(existing.status)) {
+        // startedAt est fixé à la DEMANDE dans RecordingsService.start(), mais le Web
+        // Egress met plusieurs secondes à démarrer réellement (Chrome headless +
+        // chargement de /egress-view + signal START_RECORDING) — sans ce recalage, le
+        // chrono affiché (CallTopBar) démarre déjà en avance sur la capture réelle.
+        // Uniquement sur la transition STARTING->ACTIVE (jamais si déjà ACTIVE) pour
+        // rester idempotent si le webhook ACTIVE est livré plusieurs fois.
+        const startedAt =
+          mapped === RecordingStatus.ACTIVE && existing.status === RecordingStatus.STARTING
+            ? egress.startedAt
+              ? new Date(Number(egress.startedAt / 1_000_000n))
+              : new Date()
+            : undefined;
+
         await this.prisma.recording.update({
           where: { id: existing.id },
-          data: { status: mapped },
+          data: { status: mapped, ...(startedAt && { startedAt }) },
         });
       }
     }

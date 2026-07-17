@@ -94,6 +94,55 @@ code→tokens se fait donc **entièrement côté backend** (`openid-client`,
    livestreamv3 et redémarre un conteneur qui sert du trafic existant — à faire en
    confirmant avec l'utilisateur, pas automatiquement.
 
+## Intégration Moodle (plugin `mod_webinairev2`, serveur-à-serveur)
+
+Toutes les routes sous `/api/moodle/*` sont protégées par `MoodleApiKeyGuard`
+(clé statique, pas de session Keycloak) : en-tête `X-Api-Key: <moodle.apiKey>`,
+jamais appelé par le frontend SPA ni un navigateur. Le plugin PHP lui-même
+(`classes/api.php`) vit dans un dépôt séparé, non présent dans ce repo.
+
+| Route | Usage |
+|---|---|
+| `POST /moodle/rooms` | Crée (ou retrouve, idempotent sur `meetingId`) la salle liée à une activité Moodle |
+| `GET /moodle/rooms/:roomId/status` | Statut courant de la salle |
+| `GET /moodle/rooms/:roomId/recordings` | Liste des enregistrements prêts (lien de lecture signé, TTL 30 min) |
+| `DELETE /moodle/rooms/:roomId/recordings/:recordingId` | Supprime un enregistrement |
+| `POST /moodle/users/sync` | Synchronise le rôle applicatif d'un utilisateur depuis son rôle d'inscription au cours |
+
+### `POST /moodle/users/sync`
+
+Le plugin appelle cette route à chaque jonction de salle pour signaler qu'un
+utilisateur a un rôle non-étudiant sur le cours (Enseignant, Enseignant non
+éditeur, Gestionnaire...) — c'est le plugin qui décide de `isTeacher` d'après
+le rôle d'inscription Moodle, jamais ce backend.
+
+Requête :
+```
+POST /api/moodle/users/sync
+X-Api-Key: <moodle.apiKey>
+Content-Type: application/json
+
+{
+  "email": "enseignant1@unchk.edu.sn",
+  "name": "Fatou Sow",
+  "isTeacher": true
+}
+```
+
+Réponse : `{ "userId": "...", "role": "MODERATOR" }`.
+
+Règle appliquée (**promotion jamais rétrogradation**, `UsersService.ensureAtLeastModerator`) :
+- Compte inexistant + `isTeacher=true` → créé directement en `MODERATOR`.
+- Compte `VIEWER` existant + `isTeacher=true` → promu `MODERATOR`.
+- Compte déjà `MODERATOR`/`ADMIN` → jamais touché, quel que soit `isTeacher`.
+- `isTeacher=false` → upsert du compte (placeholder `VIEWER` si inexistant),
+  **ne modifie jamais** un rôle déjà supérieur à VIEWER (un modérateur inscrit
+  comme simple étudiant sur un autre cours ne doit pas être rétrogradé).
+
+Cette même règle s'applique aussi à `POST /moodle/rooms` : l'enseignant qui crée
+l'activité (`teacherEmail`) est désormais garanti d'être au moins `MODERATOR` en
+sortie, plutôt que créé en `VIEWER` comme avant.
+
 ## Smoke tests par jalon
 
 - **Jalon 1** (fait le 2026-07-06) :

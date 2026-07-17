@@ -7,8 +7,14 @@ import { LiveKitClientsService } from "../livekit/livekit-clients.service";
 import { RecordingsService } from "../recordings/recordings.service";
 import { UsersService } from "../users/users.service";
 import { signDownloadToken } from "../common/download-token.util";
-import { MoodleRecordingDto, MoodleRoomDto, MoodleRoomStatusDto } from "@webinairev2/shared-types";
+import {
+  MoodleRecordingDto,
+  MoodleRoomDto,
+  MoodleRoomStatusDto,
+  MoodleUserSyncDto,
+} from "@webinairev2/shared-types";
 import { CreateMoodleRoomDto } from "./dto/create-moodle-room.dto";
+import { SyncMoodleUserDto } from "./dto/sync-moodle-user.dto";
 
 // Lien de lecture plus long que le lien de téléchargement "normal" (5 min, voir
 // RecordingsService) : la page Moodle peut rester ouverte un moment avant que
@@ -43,7 +49,10 @@ export class MoodleService {
     // Un enseignant Moodle peut ne s'être jamais connecté à webinairev2 au moment où
     // Moodle crée l'activité côté serveur (pas de session Keycloak disponible ici) —
     // voir UsersService.createOrGetPendingByEmail pour le mécanisme de placeholder.
-    const teacher = await this.users.createOrGetPendingByEmail(dto.teacherEmail, dto.teacherName, Role.VIEWER);
+    // ensureAtLeastModerator (promotion jamais rétrogradation) garantit qu'il pourra
+    // gérer sa salle (enregistrement, modération) sans dépendre d'une promotion
+    // manuelle depuis /admin/users.
+    const teacher = await this.users.ensureAtLeastModerator(dto.teacherEmail, dto.teacherName);
     const roomName = `webinairev2-moodle-${randomUUID()}`;
 
     await this.livekitClients.roomService.createRoom({ name: roomName, emptyTimeout: 300 });
@@ -100,5 +109,18 @@ export class MoodleService {
     const room = await this.prisma.room.findUnique({ where: { id: roomId } });
     if (!room) throw new BadRequestException("Salle introuvable");
     await this.recordings.remove(roomId, recordingId);
+  }
+
+  // Appelé par le plugin Moodle à chaque jonction de salle pour signaler le rôle
+  // d'inscription au cours (Enseignant, Enseignant non éditeur, Gestionnaire...) —
+  // le plugin décide seul de isTeacher, ce backend applique juste la règle
+  // "promotion jamais rétrogradation" (voir UsersService.ensureAtLeastModerator).
+  // isTeacher=false ne modifie jamais un rôle existant : un MODERATOR/ADMIN par
+  // ailleurs inscrit comme simple étudiant sur ce cours ne doit pas être rétrogradé.
+  async syncUser(dto: SyncMoodleUserDto): Promise<MoodleUserSyncDto> {
+    const user = dto.isTeacher
+      ? await this.users.ensureAtLeastModerator(dto.email, dto.name)
+      : await this.users.createOrGetPendingByEmail(dto.email, dto.name, Role.VIEWER);
+    return { userId: user.id, role: user.role };
   }
 }

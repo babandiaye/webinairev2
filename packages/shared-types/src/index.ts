@@ -203,6 +203,11 @@ export interface MoodleRecordingDto {
   playUrl: string;
 }
 
+export interface MoodleUserSyncDto {
+  userId: string;
+  role: Role;
+}
+
 // --- Liste de présence ---
 
 export interface AttendanceSessionDto {

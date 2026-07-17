@@ -97,11 +97,11 @@ export class UsersService {
     await this.prisma.user.delete({ where: { id: targetId } });
   }
 
-  // Utilisé aussi par MoodleService.upsertTeacherByEmail — un enseignant/utilisateur
-  // peut être référencé avant sa toute première connexion Keycloak. keycloakId
-  // "pending:<uuid>" garantit l'unicité tout en étant reconnaissable ; la vraie
-  // connexion Keycloak adoptera cette ligne (voir UserSyncService.syncFromKeycloak)
-  // plutôt que d'en créer une seconde en conflit sur la contrainte unique email.
+  // Utilisé aussi par MoodleService — un enseignant/utilisateur peut être référencé
+  // avant sa toute première connexion Keycloak. keycloakId "pending:<uuid>" garantit
+  // l'unicité tout en étant reconnaissable ; la vraie connexion Keycloak adoptera
+  // cette ligne (voir UserSyncService.syncFromKeycloak) plutôt que d'en créer une
+  // seconde en conflit sur la contrainte unique email.
   // Ne met jamais à jour un compte déjà existant (pending ou réel) — idempotent
   // au sens strict, appelant responsable de gérer les mises à jour explicites.
   async createOrGetPendingByEmail(email: string, name: string, role: Role): Promise<AdminUserDto> {
@@ -116,6 +116,36 @@ export class UsersService {
       include: { _count: { select: { createdRooms: true } } },
     });
     return this.toDto(created);
+  }
+
+  // Règle "promotion, jamais rétrogradation" : Moodle nous dit seulement "cette
+  // personne a un rôle non-étudiant sur ce cours", jamais "retire ses droits" — un
+  // modérateur (ou admin) qui serait par ailleurs inscrit comme étudiant sur un
+  // autre cours ne doit jamais perdre son rôle applicatif via ce chemin. Crée le
+  // compte en MODERATOR s'il n'existe pas, promeut un VIEWER existant, ne touche
+  // jamais un MODERATOR/ADMIN déjà en place.
+  async ensureAtLeastModerator(email: string, name: string): Promise<AdminUserDto> {
+    const existing = await this.prisma.user.findUnique({
+      where: { email },
+      include: { _count: { select: { createdRooms: true } } },
+    });
+
+    if (!existing) {
+      const created = await this.prisma.user.create({
+        data: { email, name, role: Role.MODERATOR, keycloakId: `pending:${randomUUID()}` },
+        include: { _count: { select: { createdRooms: true } } },
+      });
+      return this.toDto(created);
+    }
+
+    if (existing.role !== Role.VIEWER) return this.toDto(existing);
+
+    const updated = await this.prisma.user.update({
+      where: { id: existing.id },
+      data: { role: Role.MODERATOR },
+      include: { _count: { select: { createdRooms: true } } },
+    });
+    return this.toDto(updated);
   }
 
   // Contrairement à createOrGetPendingByEmail (silencieux, pensé pour un appel
