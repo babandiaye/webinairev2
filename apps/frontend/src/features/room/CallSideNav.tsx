@@ -1,4 +1,4 @@
-import { BarChart3, PenSquare, Presentation as PresentationIcon, Users, Video } from "lucide-react";
+import { BarChart3, PenSquare, Presentation as PresentationIcon, Settings, Users, Video } from "lucide-react";
 
 export type CallPanel = "breakout" | "whiteboard" | "polls" | "presentations";
 
@@ -14,6 +14,7 @@ export function CallSideNav({
   isInBreakout,
   activePanel,
   onSelect,
+  onOpenSettings,
   mobileOpen,
   onCloseMobile,
 }: {
@@ -21,6 +22,9 @@ export function CallSideNav({
   isInBreakout: boolean;
   activePanel: CallPanel | null;
   onSelect: (panel: CallPanel) => void;
+  // Les réglages caméra/micro/haut-parleur ne sont pas un "panneau" affiché sur
+  // la scène comme les autres (voir CallSettingsModal) — géré à part de onSelect.
+  onOpenSettings: () => void;
   mobileOpen: boolean;
   onCloseMobile: () => void;
 }) {
@@ -90,6 +94,18 @@ export function CallSideNav({
             <span>Sous-groupes</span>
           </button>
         )}
+
+        <button
+          className="call-side-nav-item call-side-nav-settings"
+          onClick={() => {
+            onOpenSettings();
+            onCloseMobile();
+          }}
+          title="Paramètres"
+        >
+          <Settings size={19} />
+          <span>Paramètres</span>
+        </button>
       </nav>
     </>
   );

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { LogOut, Users, Video } from "lucide-react";
+import { PhoneOff, Users, Video } from "lucide-react";
 import { ConnectionQualityIndicator, useLocalParticipant, useParticipants, useRoomContext } from "@livekit/components-react";
 import { api } from "../../api/client";
 import { useRecordingStatus } from "./useRecordingStatus";
@@ -30,7 +30,6 @@ export function CallTopBar({
   const { localParticipant } = useLocalParticipant();
   const room = useRoomContext();
   const [error, setError] = useState<string | null>(null);
-  const [leaveMenuOpen, setLeaveMenuOpen] = useState(false);
 
   // Chronomètre affiché pendant la capture effective (ACTIVE) — pas pendant
   // STARTING/ENDING, où startedAt existe déjà mais rien n'est encore filmé.
@@ -48,21 +47,11 @@ export function CallTopBar({
     return () => clearInterval(interval);
   }, [activeRecording?.status, activeRecording?.startedAt]);
 
-  function handleLeaveClick() {
-    if (canManage) {
-      setLeaveMenuOpen((v) => !v);
-    } else {
-      room.disconnect();
-    }
-  }
-
-  function handleLeaveSelf() {
-    setLeaveMenuOpen(false);
-    room.disconnect();
-  }
-
+  // Distinct de "Quitter" (CallControlBar, accessible à tout le monde y compris
+  // au modérateur) : celui-ci termine la réunion pour TOUT LE MONDE, geste
+  // irréversible pour les autres participants — confirmation explicite requise.
   async function handleEndForEveryone() {
-    setLeaveMenuOpen(false);
+    if (!confirm("Terminer la réunion pour tout le monde ?")) return;
     try {
       // Supprime la salle LiveKit côté serveur : force la déconnexion de TOUS les
       // participants (pas seulement soi), y compris le modérateur qui a cliqué.
@@ -106,22 +95,12 @@ export function CallTopBar({
           <Users size={14} />
           {participants.length}
         </span>
-        <div className="call-leave-wrapper">
-          <button className="call-leave-btn" title="Quitter la salle" onClick={handleLeaveClick}>
-            <LogOut size={16} />
+        {canManage && (
+          <button className="call-end-btn" onClick={handleEndForEveryone}>
+            <PhoneOff size={15} />
+            Terminer
           </button>
-
-          {leaveMenuOpen && (
-            <div className="call-leave-menu">
-              <button className="call-menu-item" onClick={handleLeaveSelf}>
-                Quitter la réunion
-              </button>
-              <button className="call-menu-item danger" onClick={handleEndForEveryone}>
-                Terminer pour tout le monde
-              </button>
-            </div>
-          )}
-        </div>
+        )}
       </div>
     </div>
   );

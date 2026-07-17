@@ -1,17 +1,16 @@
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { Track } from "livekit-client";
 import {
   useDataChannel,
   useLocalParticipant,
   useLocalParticipantPermissions,
-  useMediaDeviceSelect,
+  useRoomContext,
   useTrackToggle,
 } from "@livekit/components-react";
 import {
-  Check,
-  ChevronUp,
   Circle,
   Hand,
+  LogOut,
   MessageSquare,
   Mic,
   MicOff,
@@ -52,6 +51,9 @@ type ControlButtonProps = {
   disabledTitle?: string;
 };
 
+// Libellé fixe ("Micro", pas "Couper/Activer le micro") — l'état on/off se lit
+// déjà à la couleur et à l'icône, un texte qui change en plus n'apporte rien et
+// oblige à relire le bouton à chaque clic.
 function ControlButton({
   label,
   enabled,
@@ -75,59 +77,6 @@ function ControlButton({
       <span className="call-control-icon">{enabled ? onIcon : offIcon}</span>
       <span className="call-control-label">{label}</span>
     </button>
-  );
-}
-
-// Petit sélecteur de périphérique (micro/caméra) accolé au bouton principal —
-// même principe que le menu déroulant de Google Meet : la flèche ouvre la
-// liste des entrées disponibles, l'appareil actif est mis en évidence.
-function DeviceMenuButton({ kind, label }: { kind: MediaDeviceKind; label: string }) {
-  const { devices, activeDeviceId, setActiveMediaDevice } = useMediaDeviceSelect({
-    kind,
-    requestPermissions: true,
-  });
-  const [open, setOpen] = useState(false);
-  const wrapperRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    function handleClickOutside(e: MouseEvent) {
-      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [open]);
-
-  return (
-    <div className="call-device-menu-wrapper" ref={wrapperRef}>
-      <button
-        className="call-device-menu-trigger"
-        onClick={() => setOpen((v) => !v)}
-        title={`Choisir ${label.toLowerCase()}`}
-      >
-        <ChevronUp size={14} />
-      </button>
-      {open && devices.length > 0 && (
-        <div className="call-device-menu">
-          <div className="call-device-menu-header">{label}</div>
-          {devices.map((d) => (
-            <button
-              key={d.deviceId}
-              className={`call-device-menu-item ${d.deviceId === activeDeviceId ? "active" : ""}`}
-              onClick={() => {
-                setActiveMediaDevice(d.deviceId);
-                setOpen(false);
-              }}
-            >
-              <span>{d.label || "Périphérique inconnu"}</span>
-              {d.deviceId === activeDeviceId && <Check size={14} />}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
   );
 }
 
@@ -179,6 +128,7 @@ export function CallControlBar({
   // masqué en CSS sur desktop, où ce rail reste visible en permanence.
   onOpenMore: () => void;
 }) {
+  const room = useRoomContext();
   const mic = useTrackToggle({ source: Track.Source.Microphone });
   const camera = useTrackToggle({ source: Track.Source.Camera });
   const screenShare = useTrackToggle({ source: Track.Source.ScreenShare });
@@ -249,35 +199,33 @@ export function CallControlBar({
 
   return (
     <div className="call-control-bar">
-      <div className="call-control-group">
-        <ControlButton
-          label={mic.enabled ? "Couper le micro" : "Activer le micro"}
-          enabled={mic.enabled}
-          pending={mic.pending}
-          onIcon={<Mic size={22} />}
-          offIcon={<MicOff size={22} />}
-          buttonProps={mic.buttonProps}
-          variant="mute"
-          forceDisabled={!canSpeak}
-          disabledTitle="Le modérateur doit vous autoriser à parler"
-        />
-        {canSpeak && <DeviceMenuButton kind="audioinput" label="Microphone" />}
-      </div>
+      {/* Défile horizontalement sur mobile si tous les boutons ne tiennent pas —
+          Quitter reste HORS de cette zone (voir plus bas) pour ne jamais finir
+          hors champ sans indice visuel, contrairement au reste de la barre. */}
+      <div className="call-control-scroll">
+      <ControlButton
+        label="Micro"
+        enabled={mic.enabled}
+        pending={mic.pending}
+        onIcon={<Mic size={22} />}
+        offIcon={<MicOff size={22} />}
+        buttonProps={mic.buttonProps}
+        variant="mute"
+        forceDisabled={!canSpeak}
+        disabledTitle="Le modérateur doit vous autoriser à parler"
+      />
 
-      <div className="call-control-group">
-        <ControlButton
-          label={camera.enabled ? "Couper la caméra" : "Activer la caméra"}
-          enabled={camera.enabled}
-          pending={camera.pending}
-          onIcon={<Video size={22} />}
-          offIcon={<VideoOff size={22} />}
-          buttonProps={camera.buttonProps}
-          variant="mute"
-          forceDisabled={!canUseCamera}
-          disabledTitle="Le modérateur doit vous autoriser à activer votre caméra"
-        />
-        {canUseCamera && <DeviceMenuButton kind="videoinput" label="Caméra" />}
-      </div>
+      <ControlButton
+        label="Caméra"
+        enabled={camera.enabled}
+        pending={camera.pending}
+        onIcon={<Video size={22} />}
+        offIcon={<VideoOff size={22} />}
+        buttonProps={camera.buttonProps}
+        variant="mute"
+        forceDisabled={!canUseCamera}
+        disabledTitle="Le modérateur doit vous autoriser à activer votre caméra"
+      />
 
       {/* Masqué (pas seulement désactivé) pour un participant sans droit de
           présentation : contrairement au micro/caméra, ce n'est pas une action
@@ -285,7 +233,7 @@ export function CallControlBar({
           même comportement — le partage d'écran est réservé au présentateur). */}
       {canPresent && (
         <ControlButton
-          label={screenShare.enabled ? "Arrêter le partage" : "Partager l'écran"}
+          label="Partage d'écran"
           enabled={screenShare.enabled}
           pending={screenShare.pending}
           onIcon={<ScreenShare size={22} />}
@@ -342,6 +290,19 @@ export function CallControlBar({
         </span>
         <span className="call-control-label">Plus</span>
       </button>
+      </div>
+
+      {/* Quitter reste accessible à tout le monde (y compris le modérateur, qui
+          peut simplement partir sans mettre fin à la réunion) — terminer pour
+          tout le monde est une action distincte, réservée au modérateur, portée
+          par CallTopBar plutôt que mélangée ici. Hors de .call-control-scroll :
+          toujours visible, jamais caché par le défilement horizontal mobile. */}
+      <SimpleControlButton
+        label="Quitter"
+        icon={<LogOut size={22} />}
+        danger
+        onClick={() => room.disconnect()}
+      />
     </div>
   );
 }

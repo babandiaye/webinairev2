@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { CalendarPlus, CalendarClock, Radio, CheckCircle2, DoorOpen, Users, Video, ClipboardList, Trash2, UserCog } from "lucide-react";
+import { CalendarPlus, Radio, CheckCircle2, DoorOpen, Users, Video, ClipboardList, Trash2, UserCog } from "lucide-react";
 import { RoomDto } from "@webinairev2/shared-types";
 import { useAuth } from "../../auth/AuthProvider";
 import { api } from "../../api/client";
@@ -99,7 +99,6 @@ export function HomePage() {
     () => ({
       total: rooms.length,
       live: rooms.filter((r) => r.status === "LIVE").length,
-      scheduled: rooms.filter((r) => r.status === "SCHEDULED").length,
       ended: rooms.filter((r) => r.status === "ENDED").length,
     }),
     [rooms]
@@ -118,7 +117,6 @@ export function HomePage() {
       <div className="stat-grid">
         <StatCard label="Salles totales" value={stats.total} icon={DoorOpen} color="#2563eb" />
         <StatCard label="En direct" value={stats.live} icon={Radio} color="#dc2626" pulse />
-        <StatCard label="Programmées" value={stats.scheduled} icon={CalendarClock} color="#d97706" />
         <StatCard label="Terminées" value={stats.ended} icon={CheckCircle2} color="#15803d" />
         {isAdmin && userCount !== null && (
           <StatCard

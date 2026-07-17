@@ -781,8 +781,14 @@ button.stat-card:hover {
 /* ── Salle vidéo LiveKit ── */
 .room-page {
   height: 100vh;
+  /* 100dvh exclut la zone occupée par la barre d'URL rétractable de Safari/
+     Chrome mobile — avec 100vh seul, la barre de contrôle du bas peut se
+     retrouver partiellement masquée quand cette barre est visible. Repli
+     silencieux sur 100vh si dvh n'est pas supporté (la ligne est simplement
+     ignorée par le parseur CSS). */
+  height: 100dvh;
   display: flex;
-  background: #111319;
+  background: #0a0f1e;
   color: #fff;
   /* La salle est TOUJOURS en thème sombre, indépendamment du réglage clair/
      sombre du tableau de bord (data-theme sur <html>). Sans ce recouvrement,
@@ -797,31 +803,36 @@ button.stat-card:hover {
 /* Rail d'icônes — accès direct aux fonctionnalités de la salle, remplace
    l'ancien menu "..." en popup (toujours visible plutôt que caché). */
 .call-side-nav {
-  width: 84px;
+  width: 220px;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: 4px;
-  padding: 14px 8px;
-  background: #14161c;
+  gap: 2px;
+  padding: 14px 12px;
+  background: #121a2e;
   border-right: 1px solid rgba(255, 255, 255, 0.08);
 }
 .call-side-nav-item {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
-  gap: 6px;
+  gap: 12px;
   background: none;
   border: none;
-  color: rgba(255, 255, 255, 0.6);
-  padding: 10px 4px;
+  color: rgba(255, 255, 255, 0.65);
+  padding: 10px 12px;
   border-radius: 10px;
   cursor: pointer;
-  font-size: 0.66rem;
+  font-size: 0.86rem;
   font-weight: 500;
   line-height: 1.2;
-  text-align: center;
+  text-align: left;
+}
+/* Paramètres est toujours pertinent (réglages perso, pas une action de salle)
+   — séparé visuellement en bas de la sidebar plutôt que mêlé aux panneaux. */
+.call-side-nav-settings {
+  margin-top: auto;
 }
 .call-side-nav-item:hover:not(:disabled) {
   background: rgba(255, 255, 255, 0.06);
@@ -841,7 +852,7 @@ button.stat-card:hover {
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  background: #171a21;
+  background: #121a2e;
   border-right: 1px solid rgba(255, 255, 255, 0.08);
 }
 .call-sidebar-tabs {
@@ -1093,7 +1104,7 @@ button.stat-card:hover {
   justify-content: space-between;
   gap: 12px;
   padding: 10px 16px;
-  background: #14161c;
+  background: #121a2e;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   flex-shrink: 0;
 }
@@ -1164,42 +1175,32 @@ button.stat-card:hover {
   font-size: 0.82rem;
   color: rgba(255, 255, 255, 0.75);
 }
-.call-leave-btn {
+/* "Terminer" (modérateur uniquement) — distinct de "Quitter" (CallControlBar,
+   tout le monde) : met fin à la réunion pour tous les participants. */
+.call-end-btn {
   display: flex;
   align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
+  gap: 6px;
+  padding: 8px 14px;
   border-radius: 8px;
   border: none;
   background: var(--color-danger);
   color: #fff;
+  font-size: 0.85rem;
+  font-weight: 600;
+  font-family: inherit;
   cursor: pointer;
+  flex-shrink: 0;
 }
-.call-leave-wrapper {
-  position: relative;
-}
-.call-leave-menu {
-  position: absolute;
-  top: calc(100% + 8px);
-  right: 0;
-  z-index: 30;
-  width: 220px;
-  background: rgba(17, 19, 25, 0.95);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: var(--radius);
-  padding: 6px;
-  backdrop-filter: blur(6px);
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+.call-end-btn:hover {
+  background: #b91c1c;
 }
 
 .call-stage-wrapper {
   flex: 1;
   position: relative;
   overflow: hidden;
-  background: #111319;
+  background: #0a0f1e;
 }
 .call-stage {
   position: absolute;
@@ -1214,7 +1215,7 @@ button.stat-card:hover {
   align-items: center;
   justify-content: center;
   min-height: 0;
-  background: #000;
+  background: #05070d;
 }
 .call-stage-video {
   width: 100%;
@@ -1266,7 +1267,7 @@ button.stat-card:hover {
   height: 100px;
   border-radius: 8px;
   overflow: hidden;
-  background: #111319;
+  background: #0a0f1e;
 }
 .call-stage-secondary-tile .call-stage-name-tag {
   bottom: 6px;
@@ -1286,7 +1287,7 @@ button.stat-card:hover {
   display: flex;
   justify-content: center;
   padding: 14px;
-  background: #111319;
+  background: #0a0f1e;
   flex-shrink: 0;
 }
 
@@ -1297,20 +1298,40 @@ button.stat-card:hover {
   display: flex;
   align-items: flex-start;
   gap: 10px;
-  background: #14161c;
+  background: #121a2e;
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 16px;
-  padding: 10px 14px;
+  padding: 8px 10px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
 }
+/* Sous-groupe défilant horizontalement sur mobile si tout ne tient pas — voir
+   .call-control-bar en dessous pour Quitter, volontairement hors de ce
+   conteneur pour ne jamais se retrouver hors champ sans indice visuel. */
+.call-control-scroll {
+  display: flex;
+  align-items: flex-start;
+  gap: 2px;
+  min-width: 0;
+  overflow-x: auto;
+}
+/* Sépare visuellement Quitter (toujours visible) du reste des contrôles
+   (potentiellement défilant) — cible uniquement le bouton direct de
+   .call-control-bar, pas celui, de même variante "danger", du bouton
+   enregistrer imbriqué dans .call-control-scroll. */
+.call-control-bar > .call-control-btn-danger {
+  padding-left: 12px;
+  margin-left: 2px;
+  border-left: 1px solid rgba(255, 255, 255, 0.12);
+}
 .call-control-btn {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 6px;
   background: none;
   border: none;
-  padding: 0;
+  padding: 4px 6px;
   cursor: pointer;
   font-family: inherit;
   color: rgba(255, 255, 255, 0.65);
@@ -1341,10 +1362,27 @@ button.stat-card:hover {
   transform: translateY(-2px);
   box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35);
 }
+/* Masqué par défaut (boutons plus compacts, plus proches les uns des autres) —
+   révélé en info-bulle au survol plutôt qu'affiché en permanence sous l'icône. */
 .call-control-label {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
   font-size: 0.72rem;
   font-weight: 500;
   white-space: nowrap;
+  background: rgba(10, 15, 30, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 4px 9px;
+  border-radius: 6px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s ease;
+  z-index: 10;
+}
+.call-control-btn:hover .call-control-label {
+  opacity: 1;
 }
 
 .call-control-btn-off .call-control-icon {
@@ -1386,9 +1424,8 @@ button.stat-card:hover {
   color: #f87171;
 }
 
-/* Groupe bouton principal + sélecteur de périphérique (micro/caméra) —
-   la petite flèche en badge ouvre la liste des entrées disponibles, comme
-   le menu déroulant "Microphone"/"Camera" de Google Meet. */
+/* Positionne la bulle d'erreur (.call-control-error) au-dessus du bouton
+   enregistrer, seul contrôle de la barre à pouvoir en afficher une. */
 .call-control-group {
   position: relative;
 }
@@ -1407,95 +1444,6 @@ button.stat-card:hover {
   padding: 8px 12px;
   border-radius: 8px;
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4);
-}
-.call-device-menu-wrapper {
-  position: absolute;
-  top: -2px;
-  right: -6px;
-}
-.call-device-menu-trigger {
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: #2a2e38;
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  color: rgba(255, 255, 255, 0.8);
-  cursor: pointer;
-  transition: background 0.15s ease;
-}
-.call-device-menu-trigger:hover {
-  background: #363b47;
-}
-.call-device-menu {
-  position: absolute;
-  bottom: calc(100% + 12px);
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 40;
-  width: 260px;
-  background: rgba(23, 26, 33, 0.98);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: var(--radius);
-  padding: 6px;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
-  backdrop-filter: blur(6px);
-}
-.call-device-menu-header {
-  padding: 6px 10px 8px;
-  font-size: 0.72rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-  color: rgba(255, 255, 255, 0.45);
-}
-.call-device-menu-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  width: 100%;
-  background: none;
-  border: none;
-  color: #e6e8ec;
-  font-size: 0.83rem;
-  padding: 9px 10px;
-  border-radius: 8px;
-  cursor: pointer;
-  text-align: left;
-}
-.call-device-menu-item:hover {
-  background: rgba(255, 255, 255, 0.08);
-}
-.call-device-menu-item.active {
-  background: var(--color-primary-soft);
-  color: var(--color-primary);
-}
-
-/* Items de menu réutilisés par le menu "Quitter" (call-leave-menu) */
-.call-menu-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  background: none;
-  border: none;
-  color: #fff;
-  font-size: 0.85rem;
-  padding: 9px 8px;
-  border-radius: 8px;
-  cursor: pointer;
-  text-align: left;
-}
-.call-menu-item:hover {
-  background: rgba(255, 255, 255, 0.08);
-}
-.call-menu-item.danger {
-  color: #fca5a5;
-}
-.call-menu-item.danger:hover {
-  background: rgba(220, 38, 38, 0.16);
 }
 
 /* ── Page enregistrements (par salle) ── */
@@ -1883,7 +1831,7 @@ button.stat-card:hover {
   align-items: center;
   justify-content: space-between;
   padding: 10px 16px;
-  background: #111319;
+  background: #0a0f1e;
   color: #fff;
   font-size: 0.88rem;
   font-weight: 600;
@@ -1993,7 +1941,7 @@ button.stat-card:hover {
   position: absolute;
   inset: 0;
   z-index: 25;
-  background: #000;
+  background: #05070d;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2100,6 +2048,13 @@ button.stat-card:hover {
   }
   .call-side-nav-item {
     flex: 0 1 84px;
+    flex-direction: column;
+    gap: 6px;
+    font-size: 0.66rem;
+    text-align: center;
+  }
+  .call-side-nav-settings {
+    margin-top: 0;
   }
   /* Le bouton "Réunion" désactivé n'a de sens que comme repère visuel du rail
      permanent desktop — inutile dans une feuille d'actions ouverte à la demande. */
@@ -2115,9 +2070,10 @@ button.stat-card:hover {
   }
   .call-control-bar {
     max-width: 100%;
-    overflow-x: auto;
+    padding: 8px 8px 8px 10px;
+  }
+  .call-control-scroll {
     gap: 6px;
-    padding: 8px 10px;
   }
   .call-control-icon {
     width: 42px;
@@ -2156,4 +2112,98 @@ button.stat-card:hover {
     left: 14px;
     right: 14px;
   }
+}
+
+/* ── Salle : réglages audio/vidéo (CallSettingsModal) ── */
+.call-settings-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.call-settings-modal {
+  width: min(440px, 100%);
+  max-height: 85vh;
+  overflow-y: auto;
+  background: #121a2e;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius);
+  padding: 22px;
+  color: #fff;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+.call-settings-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+.call-settings-header h3 {
+  margin: 0 0 4px;
+  font-size: 1.1rem;
+}
+.call-settings-header p {
+  margin: 0;
+  font-size: 0.82rem;
+  color: rgba(255, 255, 255, 0.5);
+}
+.call-settings-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.call-settings-section {
+  margin-bottom: 18px;
+}
+.call-settings-section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: rgba(255, 255, 255, 0.5);
+  margin-bottom: 10px;
+}
+.call-settings-device-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.call-settings-device {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid transparent;
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 0.84rem;
+  padding: 11px 14px;
+  border-radius: 10px;
+  cursor: pointer;
+  text-align: left;
+}
+.call-settings-device:hover {
+  background: rgba(255, 255, 255, 0.09);
+}
+.call-settings-device.active {
+  background: var(--color-primary-soft);
+  border-color: rgba(59, 130, 246, 0.4);
+  color: var(--color-primary);
+  font-weight: 600;
+}
+.call-settings-hint {
+  margin: 4px 0 0;
+  font-size: 0.76rem;
+  color: rgba(255, 255, 255, 0.4);
+  text-align: center;
 }

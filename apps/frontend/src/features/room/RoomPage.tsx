@@ -10,6 +10,7 @@ import { CallSidebar, SidebarTab } from "./CallSidebar";
 import { CallStage } from "./CallStage";
 import { CallControlBar } from "./CallControlBar";
 import { CallSideNav, CallPanel } from "./CallSideNav";
+import { CallSettingsModal } from "./CallSettingsModal";
 import { BreakoutManagePanel } from "./BreakoutManagePanel";
 import { BreakoutAssignedBanner } from "./BreakoutAssignedBanner";
 import { BreakoutReturnBar } from "./BreakoutReturnBar";
@@ -37,6 +38,7 @@ export function RoomPage() {
   // à la fois : ouvrir l'un referme l'autre plutôt que de les empiler.
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [mobileSideNavOpen, setMobileSideNavOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [waitingForModerator, setWaitingForModerator] = useState(false);
   // Distingue un vrai départ (bouton "quitter", → retour à l'accueil) d'un
@@ -159,6 +161,7 @@ export function RoomPage() {
         isInBreakout={isInBreakout}
         activePanel={activePanel}
         onSelect={handleSelectPanel}
+        onOpenSettings={() => setSettingsOpen(true)}
         mobileOpen={mobileSideNavOpen}
         onCloseMobile={() => setMobileSideNavOpen(false)}
       />
@@ -235,6 +238,8 @@ export function RoomPage() {
           />
         </div>
       </div>
+
+      <CallSettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
 
       <RoomAudioRenderer />
       <StartAudio label="Cliquer pour activer le son" />
