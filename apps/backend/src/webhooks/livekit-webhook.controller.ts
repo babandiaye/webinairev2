@@ -14,7 +14,7 @@ import { PrismaService } from "../prisma/prisma.service";
 import { RoomStatus } from "@prisma/client";
 import { LiveKitClientsService } from "../livekit/livekit-clients.service";
 import { EgressReconciliationService } from "../recordings/egress-reconciliation.service";
-import { RECORDING_IN_PROGRESS_STATUSES } from "../recordings/recordings.service";
+import { RECORDING_IN_PROGRESS_STATUSES } from "../recordings/recording-status.constants";
 import { AttendanceService } from "../attendance/attendance.service";
 
 @Controller("webhooks/livekit")

@@ -16,10 +16,37 @@ prioriser au besoin.
   automatique en `MODERATOR` selon la même règle. Documenté dans
   `docs/RUNBOOK.md`. Le plugin PHP `mod_webinairev2` lui-même reste à écrire
   (dépôt séparé, sur le modèle de `mod_livestream`).
-- [x] **2026-07-17** — Chrono d'enregistrement (`CallTopBar.tsx`) qui démarrait
-  déjà à ~00:10 : `Recording.startedAt` est maintenant recalé sur l'horodatage
-  réel de LiveKit (`egress.startedAt`) à la transition STARTING→ACTIVE, au lieu
-  de rester figé sur l'instant de la demande.
+- [x] **2026-07-17** — Chrono d'enregistrement, façon Google Meet (démarrage →
+  REC → finalisation), 6 changements :
+  1. Correction du recalage de `Recording.startedAt` (`egress-reconciliation.service.ts`).
+     Une première tentative plus tôt le même jour utilisait `egress.startedAt` ;
+     vérifié dans le code source de `livekit/egress` (`pkg/config/pipeline.go`)
+     que ce champ est posé une seule fois à la CRÉATION DU JOB, avant Chrome —
+     il ne reflète jamais le vrai début de capture et ne corrigeait donc rien.
+     Remplacé par l'heure de réception du webhook `EGRESS_ACTIVE`, qui se
+     déclenche dans la même fonction Go que le vrai début de capture (±1-2 s de
+     latence webhook).
+  2. Push serveur des transitions de statut sur le data-channel
+     `recording-control` (topic centralisé dans `@webinairev2/shared-types`) —
+     le polling 5 s du frontend reste en filet de sécurité.
+  3. `CallTopBar.tsx` : 3 états distincts (STARTING "va bientôt commencer…",
+     ACTIVE = chrono, ENDING = chrono figé + "Finalisation…"), au lieu d'un
+     affichage binaire.
+  4. Réconciliation à la lecture (`RecordingsService.list()`) : un
+     enregistrement bloqué en STARTING depuis >60 s ré-interroge LiveKit à la
+     volée, sans attendre le cron de secours (5 min).
+  5. **Non appliqué** : ajout d'un champ `durationSeconds` calculé par nos
+     soins. Le champ `Recording.duration` existe déjà et est déjà alimenté par
+     la valeur `FileInfo.Duration` calculée en interne par LiveKit lui-même à
+     `EGRESS_COMPLETE` (basée sur son propre horodatage de capture exact, pas
+     une approximation) — un nouveau champ aurait été redondant et moins
+     précis. Rien changé sur ce point.
+  6. Vues egress (`EgressRoomView.tsx`) migrées vers le SDK officiel
+     `@livekit/egress-sdk` (`EgressHelper.setRoom`/`startRecording`) à la place
+     du `console.log("START_RECORDING")` manuel — permet aussi une finalisation
+     automatique (`END_RECORDING`) quand tous les autres participants ont
+     quitté, en complément du garde-fou `room_finished` déjà existant côté
+     webhook.
 
 ## À évaluer
 

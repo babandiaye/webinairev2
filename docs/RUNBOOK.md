@@ -143,6 +143,46 @@ Cette même règle s'applique aussi à `POST /moodle/rooms` : l'enseignant qui c
 l'activité (`teacherEmail`) est désormais garanti d'être au moins `MODERATOR` en
 sortie, plutôt que créé en `VIEWER` comme avant.
 
+## Tester le template d'enregistrement (`lk egress test-template`)
+
+Le CLI officiel LiveKit peut ouvrir directement la vue `/egress-view/:roomId`
+dans un vrai navigateur (pas Chrome headless) avec des participants factices,
+pour vérifier visuellement le rendu sans lancer un vrai enregistrement :
+
+```bash
+lk egress test-template \
+  --base-url "https://preprod-webinairev2.unchk.sn/egress-view/<roomId>#token=<token>" \
+  --publishers 4
+```
+
+La vue exige un token HMAC valide dans le fragment `#token=...` (voir
+`EgressTokenGuard` — même mécanisme que les liens de téléchargement
+d'enregistrement, scopé au `roomId` et expirant). Ce token n'est normalement
+généré que côté serveur, au moment de `RecordingsService.start()` — pour un
+test manuel, en génère un directement avec le même secret que le backend
+(`DOWNLOAD_LINK_SECRET` dans `.env`) :
+
+```bash
+cd /var/www/html/webinairev2/apps/backend
+DOWNLOAD_LINK_SECRET=$(grep ^DOWNLOAD_LINK_SECRET ../../.env | cut -d= -f2-) \
+ROOM_ID=<roomId> \
+EXP=$(($(date +%s) + 3600)) \
+node -e '
+const { createHmac } = require("crypto");
+const payload = { resourceId: process.env.ROOM_ID, exp: Number(process.env.EXP) };
+const body = Buffer.from(JSON.stringify(payload)).toString("base64url");
+const sig = createHmac("sha256", process.env.DOWNLOAD_LINK_SECRET).update(body).digest("base64url");
+console.log(`${body}.${sig}`);
+'
+```
+
+(Reproduit exactement `signDownloadToken()` de `common/download-token.util.ts` —
+si cette fonction change un jour, mettre ce script à jour en même temps.)
+
+Le `roomId` doit être celui d'une salle réelle existante (`Room.id` en base) ;
+la vue interroge `whiteboard/state`/`presentations/active` via ce même token,
+donc une salle inexistante donnera un écran vide sans erreur visible.
+
 ## Smoke tests par jalon
 
 - **Jalon 1** (fait le 2026-07-06) :

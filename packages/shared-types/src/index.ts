@@ -6,6 +6,12 @@ export type RoomStatus = "SCHEDULED" | "LIVE" | "ENDED";
 
 export type RecordingStatus = "STARTING" | "ACTIVE" | "ENDING" | "READY" | "FAILED";
 
+// Topic data-channel LiveKit utilisé à la fois par le backend (push serveur à
+// chaque transition de statut, voir EgressReconciliationService) et le
+// frontend (useRecordingStatus.ts) — centralisé ici pour que les deux
+// extrémités ne puissent pas diverger sur la chaîne de caractères.
+export const RECORDING_CONTROL_TOPIC = "recording-control";
+
 export type PollStatus = "DRAFT" | "OPEN" | "CLOSED";
 
 export type PresentationStatus = "UPLOADED" | "CONVERTING" | "READY" | "FAILED";

@@ -1,9 +1,8 @@
 import { useEffect, useState } from "react";
 import { useDataChannel } from "@livekit/components-react";
-import { RecordingDto, RecordingStatus } from "@webinairev2/shared-types";
+import { RECORDING_CONTROL_TOPIC, RecordingDto, RecordingStatus } from "@webinairev2/shared-types";
 import { api } from "../../api/client";
 
-export const RECORDING_CONTROL_TOPIC = "recording-control";
 const RECORDING_POLL_INTERVAL_MS = 5000;
 export const RECORDING_IN_PROGRESS_STATUSES: RecordingStatus[] = ["STARTING", "ACTIVE", "ENDING"];
 

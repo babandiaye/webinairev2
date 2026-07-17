@@ -8,6 +8,8 @@ import { S3Service } from "../storage/s3.service";
 import { SessionUser } from "../auth/session.types";
 import { DownloadLinkDto, RecordingDto, RecordingWithRoomDto } from "@webinairev2/shared-types";
 import { signDownloadToken } from "../common/download-token.util";
+import { RECORDING_IN_PROGRESS_STATUSES } from "./recording-status.constants";
+import { EgressReconciliationService } from "./egress-reconciliation.service";
 
 const DOWNLOAD_LINK_TTL_SECONDS = 5 * 60;
 // Doit couvrir la durée max réaliste d'une session (le token reste valide tout
@@ -17,16 +19,10 @@ const DOWNLOAD_LINK_TTL_SECONDS = 5 * 60;
 // egressUrl plus bas).
 const EGRESS_TOKEN_TTL_SECONDS = 4 * 60 * 60;
 
-// Un enregistrement traverse STARTING (requête envoyée à LiveKit, egress pas
-// encore confirmé actif) -> ACTIVE (confirmé par webhook egress_active) ->
-// ENDING (arrêt demandé, fichier en cours de finalisation/upload) -> READY.
-// Ces 3 états comptent comme "en cours" pour bloquer un double démarrage,
-// autoriser l'arrêt, ou empêcher la suppression.
-export const RECORDING_IN_PROGRESS_STATUSES: RecordingStatus[] = [
-  RecordingStatus.STARTING,
-  RecordingStatus.ACTIVE,
-  RecordingStatus.ENDING,
-];
+// Fenêtre normale de démarrage (Chrome headless + chargement de la vue + signal
+// START_RECORDING) : sous ce seuil, un enregistrement encore STARTING est
+// normal, pas la peine d'interroger LiveKit à chaque lecture de la liste.
+const STARTING_RECONCILE_THRESHOLD_MS = 60 * 1000;
 
 // Nom de fichier façon BigBlueButton : pas de préfixe applicatif, UUID compacté
 // (seul le tiret précédant les 12 derniers caractères est conservé) + horodatage.
@@ -43,7 +39,8 @@ export class RecordingsService {
     private readonly prisma: PrismaService,
     private readonly livekitClients: LiveKitClientsService,
     private readonly s3: S3Service,
-    private readonly config: ConfigService
+    private readonly config: ConfigService,
+    private readonly reconciliation: EgressReconciliationService
   ) {}
 
   async start(roomId: string): Promise<RecordingDto> {
@@ -128,7 +125,47 @@ export class RecordingsService {
       where: { roomId },
       orderBy: { createdAt: "desc" },
     });
-    return recordings.map((r) => this.toDto(r));
+
+    // Auto-réparation : si le webhook egress_active/egress_ended a été perdu
+    // (Redis/worker egress indisponible un instant), le cron de secours
+    // (reconcileStuckRecordings) ne repasse que toutes les 5 min — trop long
+    // pour un participant qui regarde l'écran "va bientôt commencer" se figer.
+    // On retente ici, mais jamais avant STARTING_RECONCILE_THRESHOLD_MS (un
+    // démarrage normal met déjà plusieurs secondes, pas la peine d'appeler
+    // LiveKit à chaque affichage de la liste). Une erreur LiveKit ici ne doit
+    // jamais empêcher de renvoyer la liste telle quelle.
+    const staleStarting = recordings.filter(
+      (r) =>
+        r.status === RecordingStatus.STARTING &&
+        r.egressId &&
+        Date.now() - r.createdAt.getTime() > STARTING_RECONCILE_THRESHOLD_MS
+    );
+    if (staleStarting.length === 0) {
+      return recordings.map((r) => this.toDto(r));
+    }
+
+    // Un seul aller-retour de réconciliation par appel (pas de re-vérification
+    // récursive du seuil) : si l'egress est encore légitimement STARTING après
+    // la tentative, on ne veut pas ré-appeler LiveKit en boucle à chaque lecture.
+    await this.reconcileStale(staleStarting.map((r) => r.egressId!));
+    const refreshed = await this.prisma.recording.findMany({
+      where: { roomId },
+      orderBy: { createdAt: "desc" },
+    });
+    return refreshed.map((r) => this.toDto(r));
+  }
+
+  private async reconcileStale(egressIds: string[]): Promise<void> {
+    for (const egressId of egressIds) {
+      try {
+        const [egress] = await this.livekitClients.egressClient.listEgress({ egressId });
+        if (egress) await this.reconciliation.reconcileRecording(egress);
+      } catch {
+        // LiveKit indisponible ou egress introuvable : on retentera à la
+        // prochaine lecture (ou le cron de secours prendra le relais) — ne
+        // jamais faire échouer l'affichage de la liste pour autant.
+      }
+    }
   }
 
   // Toutes salles confondues — page d'administration globale (voir RecordingsController,

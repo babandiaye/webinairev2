@@ -15,10 +15,8 @@ import {
 import { FileInterceptor } from "@nestjs/platform-express";
 import { Response } from "express";
 import { ConfigService } from "@nestjs/config";
-import { Role } from "@prisma/client";
 import { SessionAuthGuard } from "../auth/session-auth.guard";
 import { RolesGuard } from "../auth/roles.guard";
-import { RequireRole } from "../auth/roles.decorator";
 import { RoomAccessGuard, RequireRoomAccess } from "../rooms/room-access.guard";
 import { CurrentUser } from "../auth/current-user.decorator";
 import { SessionUser } from "../auth/session.types";
@@ -49,9 +47,11 @@ export class PresentationsController {
     return this.presentations.getOne(roomId, id);
   }
 
+  // RequireRoomAccess seul : voir le commentaire équivalent dans
+  // polls.controller.ts (RequireRole en plus créait un cas incohérent pour un
+  // créateur de salle rétrogradé après coup).
   @Post()
   @RequireRoomAccess()
-  @RequireRole(Role.ADMIN, Role.MODERATOR)
   @UseInterceptors(FileInterceptor("file", { limits: { fileSize: MAX_UPLOAD_BYTES } }))
   upload(
     @Param("roomId") roomId: string,

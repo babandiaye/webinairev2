@@ -1,12 +1,44 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
-import { LiveKitRoom, RoomAudioRenderer } from "@livekit/components-react";
+import {
+  LiveKitRoom,
+  RoomAudioRenderer,
+  useConnectionState,
+  useRoomContext,
+} from "@livekit/components-react";
+import { ConnectionState } from "livekit-client";
+import EgressHelper from "@livekit/egress-sdk";
 import "@livekit/components-styles";
 import { EgressJoinDto } from "@webinairev2/shared-types";
 import { egressApi } from "../../api/egressApi";
 import { CallStage } from "../room/CallStage";
 import { EgressWhiteboardView } from "./EgressWhiteboardView";
 import { EgressPresentationView } from "./EgressPresentationView";
+
+// SDK officiel de template d'enregistrement LiveKit — remplace le
+// console.log("START_RECORDING") manuel par l'API dédiée. On n'utilise QUE les
+// signaux (setRoom/startRecording) : EgressHelper.getLiveKitURL()/getAccessToken()
+// sont pour le mode RoomComposite où LiveKit injecte lui-même l'URL/le token —
+// notre auth (token HMAC en fragment, voir plus bas) reste inchangée.
+function EgressRecordingSignal() {
+  const room = useRoomContext();
+  const connectionState = useConnectionState(room);
+  const started = useRef(false);
+
+  useEffect(() => {
+    if (connectionState !== ConnectionState.Connected || started.current) return;
+    started.current = true;
+    // setRoom AVANT startRecording : d'après la doc du SDK, ça permet aussi au
+    // helper d'émettre END_RECORDING automatiquement quand tous les autres
+    // participants ont quitté la salle — finalisation propre du MP4 même si la
+    // salle se ferme brutalement, en complément (pas en remplacement) du
+    // garde-fou room_finished déjà en place côté webhook.
+    EgressHelper.setRoom(room);
+    EgressHelper.startRecording();
+  }, [connectionState, room]);
+
+  return null;
+}
 
 // Page chargée par le Chrome headless de LiveKit Web Egress (voir
 // RecordingsService.start()) — jamais par un vrai utilisateur. Rendu minimal :
@@ -42,11 +74,11 @@ export function EgressRoomView() {
       connect
       video={false}
       audio={false}
-      // Signal attendu par LiveKit Egress (awaitStartSignal: true côté serveur) :
-      // sans lui, l'enregistrement démarrerait avant que la salle ait fini de se
-      // connecter/rendre, capturant un écran vide en début de vidéo.
-      onConnected={() => console.log("START_RECORDING")}
     >
+      {/* Signal attendu par LiveKit Egress (awaitStartSignal: true côté serveur) :
+          sans lui, l'enregistrement démarrerait avant que la salle ait fini de
+          se connecter/rendre, capturant un écran vide en début de vidéo. */}
+      <EgressRecordingSignal />
       <div className="call-stage-wrapper" style={{ height: "100vh" }}>
         <CallStage />
         <EgressWhiteboardView roomId={id} token={token} />

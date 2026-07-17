@@ -204,7 +204,10 @@ export class RoomsService {
   async muteParticipant(id: string, identity: string): Promise<void> {
     const room = await this.findOneOrThrow(id);
     const participant = await this.livekitClients.roomService.getParticipant(room.roomName, identity);
-    const audioTrack = participant.tracks.find((t) => t.type === TrackType.AUDIO);
+    // source === MICROPHONE (pas seulement type === AUDIO) : voir le même
+    // correctif dans muteAllParticipants ci-dessous (piste SCREEN_SHARE_AUDIO
+    // sinon potentiellement coupée à la place du micro).
+    const audioTrack = participant.tracks.find((t) => t.type === TrackType.AUDIO && t.source === TrackSource.MICROPHONE);
     if (!audioTrack) return;
     await this.livekitClients.roomService.mutePublishedTrack(room.roomName, identity, audioTrack.sid, true);
   }
@@ -280,7 +283,13 @@ export class RoomsService {
       }
       if (isModerator) continue;
 
-      const audioTrack = participant.tracks.find((t) => t.type === TrackType.AUDIO && !t.muted);
+      // source === MICROPHONE (pas seulement type === AUDIO) : un participant qui
+      // partage son écran avec le son système publie aussi une piste AUDIO
+      // (SCREEN_SHARE_AUDIO) — sans ce filtre, "couper tous les micros" pouvait
+      // couper cette piste-là au lieu du micro selon l'ordre du tableau.
+      const audioTrack = participant.tracks.find(
+        (t) => t.type === TrackType.AUDIO && t.source === TrackSource.MICROPHONE && !t.muted
+      );
       if (!audioTrack) continue;
       await this.livekitClients.roomService.mutePublishedTrack(
         room.roomName,

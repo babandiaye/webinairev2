@@ -1,8 +1,6 @@
 import { Body, Controller, Get, Param, Post, UseGuards } from "@nestjs/common";
-import { Role } from "@prisma/client";
 import { SessionAuthGuard } from "../auth/session-auth.guard";
 import { RolesGuard } from "../auth/roles.guard";
-import { RequireRole } from "../auth/roles.decorator";
 import { RoomAccessGuard, RequireRoomAccess } from "../rooms/room-access.guard";
 import { CurrentUser } from "../auth/current-user.decorator";
 import { SessionUser } from "../auth/session.types";
@@ -31,9 +29,11 @@ export class BreakoutRoomsController {
     return this.breakoutRooms.listParticipants(roomId);
   }
 
+  // RequireRoomAccess seul : voir le commentaire équivalent dans
+  // polls.controller.ts (RequireRole en plus créait un cas incohérent pour un
+  // créateur de salle rétrogradé après coup).
   @Post()
   @RequireRoomAccess()
-  @RequireRole(Role.ADMIN, Role.MODERATOR)
   create(@Param("roomId") roomId: string, @Body() dto: CreateBreakoutRoomsDto) {
     return this.breakoutRooms.create(roomId, dto.count);
   }

@@ -1,8 +1,6 @@
 import { Body, Controller, Get, Param, Post, UseGuards } from "@nestjs/common";
-import { Role } from "@prisma/client";
 import { SessionAuthGuard } from "../auth/session-auth.guard";
 import { RolesGuard } from "../auth/roles.guard";
-import { RequireRole } from "../auth/roles.decorator";
 import { RoomAccessGuard, RequireRoomAccess } from "../rooms/room-access.guard";
 import { CurrentUser } from "../auth/current-user.decorator";
 import { SessionUser } from "../auth/session.types";
@@ -20,9 +18,14 @@ export class PollsController {
     return this.polls.list(roomId, user.id);
   }
 
+  // RequireRoomAccess seul (créateur de la salle ou ADMIN) : ajouter en plus
+  // RequireRole(ADMIN, MODERATOR) créait un cas incohérent — un créateur de
+  // salle rétrogradé en VIEWER après coup (via /admin/users) perdrait le droit
+  // de créer un sondage dans SA PROPRE salle, alors que toutes les autres
+  // actions de créateur (enregistrement, sous-groupes, tableau blanc...) ne
+  // dépendent que de RequireRoomAccess, jamais du rôle global courant.
   @Post()
   @RequireRoomAccess()
-  @RequireRole(Role.ADMIN, Role.MODERATOR)
   create(@Param("roomId") roomId: string, @Body() dto: CreatePollDto, @CurrentUser() user: SessionUser) {
     return this.polls.create(roomId, user.id, dto);
   }

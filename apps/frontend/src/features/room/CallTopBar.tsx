@@ -12,6 +12,11 @@ function formatElapsed(seconds: number): string {
   return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
 }
 
+// Si le démarrage (Chrome headless + chargement de /egress-view + signal
+// START_RECORDING) dépasse cette durée, on le signale plutôt que de laisser le
+// message "va bientôt commencer" tourner indéfiniment sans explication.
+const STARTING_TOO_LONG_MS = 45_000;
+
 export function CallTopBar({
   roomId,
   title,
@@ -26,26 +31,42 @@ export function CallTopBar({
   // voit quand même qu'un enregistrement est en cours, pour la transparence.
   const { activeRecording } = useRecordingStatus(roomId);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [startingTooLong, setStartingTooLong] = useState(false);
   const participants = useParticipants();
   const { localParticipant } = useLocalParticipant();
   const room = useRoomContext();
   const [error, setError] = useState<string | null>(null);
 
-  // Chronomètre affiché pendant la capture effective (ACTIVE) — pas pendant
-  // STARTING/ENDING, où startedAt existe déjà mais rien n'est encore filmé.
+  // Chronomètre tenu à jour uniquement pendant la capture effective (ACTIVE).
+  // Pendant ENDING, cet effet ne fait rien : elapsedSeconds garde volontairement
+  // sa dernière valeur ACTIVE (chrono "figé") plutôt que d'être remis à zéro.
   useEffect(() => {
-    if (activeRecording?.status !== "ACTIVE" || !activeRecording.startedAt) {
+    if (!activeRecording) {
       setElapsedSeconds(0);
+      setStartingTooLong(false);
       return;
     }
-    const startedAt = new Date(activeRecording.startedAt).getTime();
-    function tick() {
-      setElapsedSeconds(Math.max(0, Math.floor((Date.now() - startedAt) / 1000)));
+
+    if (activeRecording.status === "STARTING") {
+      const createdAt = new Date(activeRecording.createdAt).getTime();
+      function tick() {
+        setStartingTooLong(Date.now() - createdAt > STARTING_TOO_LONG_MS);
+      }
+      tick();
+      const interval = setInterval(tick, 1000);
+      return () => clearInterval(interval);
     }
-    tick();
-    const interval = setInterval(tick, 1000);
-    return () => clearInterval(interval);
-  }, [activeRecording?.status, activeRecording?.startedAt]);
+
+    if (activeRecording.status === "ACTIVE" && activeRecording.startedAt) {
+      const startedAt = new Date(activeRecording.startedAt).getTime();
+      function tick() {
+        setElapsedSeconds(Math.max(0, Math.floor((Date.now() - startedAt) / 1000)));
+      }
+      tick();
+      const interval = setInterval(tick, 1000);
+      return () => clearInterval(interval);
+    }
+  }, [activeRecording?.status, activeRecording?.startedAt, activeRecording?.createdAt]);
 
   // Distinct de "Quitter" (CallControlBar, accessible à tout le monde y compris
   // au modérateur) : celui-ci termine la réunion pour TOUT LE MONDE, geste
@@ -74,14 +95,21 @@ export function CallTopBar({
 
       <div className="call-topbar-center">
         {activeRecording && (
-          <div className="recording-status">
+          <div
+            className={
+              activeRecording.status === "STARTING"
+                ? "recording-status recording-status-starting"
+                : "recording-status"
+            }
+          >
             <span className="recording-dot" />
-            {activeRecording.status === "ACTIVE"
-              ? "Enregistrement en cours"
-              : activeRecording.status === "STARTING"
-                ? "Démarrage de l'enregistrement…"
-                : "Finalisation de l'enregistrement…"}
-            {activeRecording.status === "ACTIVE" && (
+            {activeRecording.status === "STARTING" &&
+              (startingTooLong
+                ? "Le démarrage prend plus longtemps que prévu…"
+                : "L'enregistrement va bientôt commencer…")}
+            {activeRecording.status === "ACTIVE" && "Enregistrement en cours"}
+            {activeRecording.status === "ENDING" && "Finalisation…"}
+            {(activeRecording.status === "ACTIVE" || activeRecording.status === "ENDING") && (
               <span className="recording-timer">{formatElapsed(elapsedSeconds)}</span>
             )}
           </div>

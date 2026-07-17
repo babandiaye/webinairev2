@@ -107,6 +107,9 @@ importers:
       '@livekit/components-styles':
         specifier: ^1.1.4
         version: 1.2.0
+      '@livekit/egress-sdk':
+        specifier: ^0.2.1
+        version: 0.2.1(livekit-client@2.20.0(@types/dom-mediacapture-record@1.0.22))
       '@webinairev2/shared-types':
         specifier: workspace:*
         version: link:../../packages/shared-types
@@ -598,6 +601,11 @@ packages:
   '@livekit/components-styles@1.2.0':
     resolution: {integrity: sha512-74/rt0lDh6aHmOPmWAeDE9C4OrNW9RIdmhX/YRbovQBVNGNVWojRjl3FgQZ5LPFXO6l1maKB4JhXcBFENVxVvw==}
     engines: {node: '>=18'}
+
+  '@livekit/egress-sdk@0.2.1':
+    resolution: {integrity: sha512-pmg5K2zXv3YDj/dxLG1OLvzbTKHEp0hmPbLa9a2tsy08jFIg6tRp+bwRaFH0HM1XLMDn2Ng0c/fY3FW87IYkwQ==}
+    peerDependencies:
+      livekit-client: ^1.15.13 || ^2.7.5
 
   '@livekit/mutex@1.1.1':
     resolution: {integrity: sha512-EsshAucklmpuUAfkABPxJNhzj9v2sG7JuzFDL4ML1oJQSV14sqrpTYnsaOudMAw9yOaW53NU3QQTlUQoRs4czw==}
@@ -4037,6 +4045,10 @@ snapshots:
       usehooks-ts: 3.1.1(react@18.3.1)
 
   '@livekit/components-styles@1.2.0': {}
+
+  '@livekit/egress-sdk@0.2.1(livekit-client@2.20.0(@types/dom-mediacapture-record@1.0.22))':
+    dependencies:
+      livekit-client: 2.20.0(@types/dom-mediacapture-record@1.0.22)
 
   '@livekit/mutex@1.1.1': {}
 

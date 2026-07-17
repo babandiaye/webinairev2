@@ -1,9 +1,10 @@
 import { Injectable, Logger } from "@nestjs/common";
-import { EgressInfo, EgressStatus } from "livekit-server-sdk";
+import { DataPacket_Kind, EgressInfo, EgressStatus } from "livekit-server-sdk";
 import { RecordingStatus } from "@prisma/client";
+import { RECORDING_CONTROL_TOPIC } from "@webinairev2/shared-types";
 import { PrismaService } from "../prisma/prisma.service";
 import { LiveKitClientsService } from "../livekit/livekit-clients.service";
-import { RECORDING_IN_PROGRESS_STATUSES } from "./recordings.service";
+import { RECORDING_IN_PROGRESS_STATUSES } from "./recording-status.constants";
 
 // Filet de sécurité seulement pour les enregistrements encore "en cours" ; ne
 // rattrape pas deux fois le même si le cron et un webhook se chevauchent.
@@ -46,6 +47,7 @@ export class EgressReconciliationService {
 
     const existing = await this.prisma.recording.findFirst({
       where: { egressId: egress.egressId },
+      include: { room: { select: { roomName: true } } },
     });
     if (!existing) return;
 
@@ -61,6 +63,7 @@ export class EgressReconciliationService {
         data: { s3Key, filename, size, duration, status: RecordingStatus.READY },
       });
       this.logger.log(`Recording READY : ${filename}`);
+      await this.pushStatusUpdate(existing.room.roomName);
     } else if (
       egress.status === EgressStatus.EGRESS_FAILED ||
       egress.status === EgressStatus.EGRESS_ABORTED
@@ -70,6 +73,7 @@ export class EgressReconciliationService {
         data: { status: RecordingStatus.FAILED },
       });
       this.logger.warn(`Recording FAILED : ${egress.egressId} (${egress.error})`);
+      await this.pushStatusUpdate(existing.room.roomName);
     } else {
       const mapped = EGRESS_STATUS_TO_RECORDING_STATUS[egress.status];
       // Ne jamais faire régresser un enregistrement déjà finalisé (READY/FAILED)
@@ -77,22 +81,57 @@ export class EgressReconciliationService {
       if (mapped && RECORDING_IN_PROGRESS_STATUSES.includes(existing.status)) {
         // startedAt est fixé à la DEMANDE dans RecordingsService.start(), mais le Web
         // Egress met plusieurs secondes à démarrer réellement (Chrome headless +
-        // chargement de /egress-view + signal START_RECORDING) — sans ce recalage, le
-        // chrono affiché (CallTopBar) démarre déjà en avance sur la capture réelle.
-        // Uniquement sur la transition STARTING->ACTIVE (jamais si déjà ACTIVE) pour
-        // rester idempotent si le webhook ACTIVE est livré plusieurs fois.
+        // chargement de /egress-view + signal START_RECORDING). Pourquoi on n'utilise
+        // PAS egress.startedAt pour corriger ça (contrairement à une première tentative) :
+        // vérifié dans le code source de livekit/egress (pkg/config/pipeline.go) que ce
+        // champ top-level est posé UNE SEULE FOIS à la création du job, avant même le
+        // lancement de Chrome, et n'est plus jamais réécrit — il ne reflète donc jamais
+        // le vrai début de capture (seul le FileInfo.StartedAt interne, non exposé avant
+        // EGRESS_COMPLETE, le reflète). En revanche, la transition de statut vers ACTIVE
+        // (pkg/pipeline/controller.go, updateStartTime) est déclenchée dans la MÊME
+        // fonction Go juste après le vrai début de capture — donc l'heure de réception
+        // de ce webhook côté backend est le meilleur repère disponible (±1-2 s de
+        // latence webhook près). Uniquement sur la transition STARTING->ACTIVE (jamais
+        // si déjà ACTIVE) pour rester idempotent si le webhook est livré plusieurs fois.
         const startedAt =
           mapped === RecordingStatus.ACTIVE && existing.status === RecordingStatus.STARTING
-            ? egress.startedAt
-              ? new Date(Number(egress.startedAt / 1_000_000n))
-              : new Date()
+            ? new Date()
             : undefined;
+
+        if (startedAt) {
+          const deltaMs = startedAt.getTime() - existing.createdAt.getTime();
+          this.logger.log(
+            `Recording ACTIVE : ${existing.id} (délai demande->capture ${deltaMs} ms)`
+          );
+        }
 
         await this.prisma.recording.update({
           where: { id: existing.id },
           data: { status: mapped, ...(startedAt && { startedAt }) },
         });
+        await this.pushStatusUpdate(existing.room.roomName);
       }
+    }
+  }
+
+  // Sans ça, les participants ne découvrent une transition (démarrage réel,
+  // finalisation, échec...) que via leur polling de 5 s (useRecordingStatus.ts) —
+  // ce signal accélère l'affichage à quasi immédiat. Ne transporte jamais l'état
+  // lui-même (juste "va re-fetch"), même pattern que whiteboard/sondages/
+  // présentations : la source de vérité reste toujours la base via l'API REST.
+  // Échec d'envoi (salle déjà fermée côté LiveKit, service indisponible) : ne
+  // doit jamais faire échouer la réconciliation elle-même, seulement dégrader
+  // vers le polling de secours.
+  private async pushStatusUpdate(roomName: string): Promise<void> {
+    try {
+      await this.livekitClients.roomService.sendData(
+        roomName,
+        new TextEncoder().encode("updated"),
+        DataPacket_Kind.RELIABLE,
+        { topic: RECORDING_CONTROL_TOPIC }
+      );
+    } catch (e) {
+      this.logger.warn(`Push data-channel échoué pour la salle ${roomName}: ${e}`);
     }
   }
 
