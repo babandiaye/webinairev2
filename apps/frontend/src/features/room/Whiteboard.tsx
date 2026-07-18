@@ -38,6 +38,12 @@ export function Whiteboard({ roomId, canManage }: { roomId: string; canManage: b
   // partie part hors champ sur un écran mobile étroit. Jamais utilisé côté
   // modérateur (sa caméra n'est jamais touchée automatiquement).
   const followViewportRef = useRef(true);
+  // Consommé par handleScrollChange pour ignorer le changement de caméra causé
+  // par NOTRE PROPRE scrollToContent automatique (Correctif 1) — sans ce
+  // garde-fou, chaque recadrage automatique se désengagerait lui-même
+  // immédiatement, puisqu'onScrollChange se déclenche aussi bien pour un
+  // geste utilisateur que pour un scrollToContent programmatique.
+  const justFitRef = useRef(false);
 
   // Seul le modérateur diffuse : les autres sont de toute façon en lecture
   // seule côté UI (viewModeEnabled), mais un client modifié pourrait quand même
@@ -73,6 +79,7 @@ export function Whiteboard({ roomId, canManage }: { roomId: string; canManage: b
       // followViewportRef) — jamais pour le modérateur, dont la caméra ne doit
       // jamais être touchée automatiquement pendant qu'il dessine.
       if (!canManage && followViewportRef.current && reconciled.length > 0) {
+        justFitRef.current = true;
         excalidrawAPI.scrollToContent(reconciled, { fitToContent: true, animate: false });
       }
     } catch {
@@ -114,6 +121,7 @@ export function Whiteboard({ roomId, canManage }: { roomId: string; canManage: b
           // un resync réseau (RoomEvent.Reconnected) ne doit pas lui arracher la
           // caméra s'il l'avait déjà déplacée avant la coupure.
           if (elements.length > 0 && (canManage || followViewportRef.current)) {
+            justFitRef.current = true;
             excalidrawAPI.scrollToContent(elements, { fitToContent: true, animate: false });
           }
         }
@@ -167,6 +175,21 @@ export function Whiteboard({ roomId, canManage }: { roomId: string; canManage: b
       if (original) meta.setAttribute("content", original);
     };
   }, [open]);
+
+  // Débraye le suivi de caméra (Correctif 1) dès que LE SPECTATEUR déplace
+  // lui-même la caméra (pan/pinch-zoom pour inspecter un détail) — sinon le
+  // prochain trait reçu la lui arracherait aussitôt. onScrollChange se
+  // déclenche pour tout changement de caméra, y compris ceux causés par nos
+  // propres scrollToContent automatiques : justFitRef distingue les deux et
+  // n'écarte que ce cas-là (voir sa déclaration plus haut).
+  const handleScrollChange = useCallback(() => {
+    if (canManage) return;
+    if (justFitRef.current) {
+      justFitRef.current = false;
+      return;
+    }
+    followViewportRef.current = false;
+  }, [canManage]);
 
   const handleChange = useCallback(
     (elements: readonly OrderedExcalidrawElement[]) => {
@@ -234,6 +257,7 @@ export function Whiteboard({ roomId, canManage }: { roomId: string; canManage: b
           excalidrawAPI={(a) => setExcalidrawAPI(a)}
           onChange={handleChange}
           viewModeEnabled={!canManage}
+          onScrollChange={handleScrollChange}
           // Réduit le menu (utile surtout sur l'UI mobile d'Excalidraw, plus
           // contrainte en place) et retire des actions inadaptées à une scène
           // partagée en direct : loadScene écraserait le dessin de tout le
