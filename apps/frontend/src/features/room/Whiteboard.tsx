@@ -42,8 +42,12 @@ export function Whiteboard({ roomId, canManage }: { roomId: string; canManage: b
   // par NOTRE PROPRE scrollToContent automatique (Correctif 1) — sans ce
   // garde-fou, chaque recadrage automatique se désengagerait lui-même
   // immédiatement, puisqu'onScrollChange se déclenche aussi bien pour un
-  // geste utilisateur que pour un scrollToContent programmatique.
-  const justFitRef = useRef(false);
+  // geste utilisateur que pour un scrollToContent programmatique. Fenêtre
+  // temporelle plutôt que flag consommé une seule fois : handleRecenter
+  // recadre avec animate:true, dont l'animation déclenche onScrollChange à
+  // chaque frame — un flag à usage unique laisserait les frames suivantes
+  // débrayer le suivi qu'on vient tout juste de réengager.
+  const suppressDisengageUntilRef = useRef(0);
 
   // Seul le modérateur diffuse : les autres sont de toute façon en lecture
   // seule côté UI (viewModeEnabled), mais un client modifié pourrait quand même
@@ -79,7 +83,7 @@ export function Whiteboard({ roomId, canManage }: { roomId: string; canManage: b
       // followViewportRef) — jamais pour le modérateur, dont la caméra ne doit
       // jamais être touchée automatiquement pendant qu'il dessine.
       if (!canManage && followViewportRef.current && reconciled.length > 0) {
-        justFitRef.current = true;
+        suppressDisengageUntilRef.current = Date.now() + 800;
         excalidrawAPI.scrollToContent(reconciled, { fitToContent: true, animate: false });
       }
     } catch {
@@ -121,7 +125,7 @@ export function Whiteboard({ roomId, canManage }: { roomId: string; canManage: b
           // un resync réseau (RoomEvent.Reconnected) ne doit pas lui arracher la
           // caméra s'il l'avait déjà déplacée avant la coupure.
           if (elements.length > 0 && (canManage || followViewportRef.current)) {
-            justFitRef.current = true;
+            suppressDisengageUntilRef.current = Date.now() + 800;
             excalidrawAPI.scrollToContent(elements, { fitToContent: true, animate: false });
           }
         }
@@ -180,14 +184,11 @@ export function Whiteboard({ roomId, canManage }: { roomId: string; canManage: b
   // lui-même la caméra (pan/pinch-zoom pour inspecter un détail) — sinon le
   // prochain trait reçu la lui arracherait aussitôt. onScrollChange se
   // déclenche pour tout changement de caméra, y compris ceux causés par nos
-  // propres scrollToContent automatiques : justFitRef distingue les deux et
-  // n'écarte que ce cas-là (voir sa déclaration plus haut).
+  // propres scrollToContent automatiques : suppressDisengageUntilRef distingue
+  // les deux et n'écarte que ce cas-là (voir sa déclaration plus haut).
   const handleScrollChange = useCallback(() => {
     if (canManage) return;
-    if (justFitRef.current) {
-      justFitRef.current = false;
-      return;
-    }
+    if (Date.now() < suppressDisengageUntilRef.current) return;
     followViewportRef.current = false;
   }, [canManage]);
 
@@ -236,7 +237,7 @@ export function Whiteboard({ roomId, canManage }: { roomId: string; canManage: b
   function handleRecenter() {
     if (!excalidrawAPI) return;
     followViewportRef.current = true;
-    justFitRef.current = true;
+    suppressDisengageUntilRef.current = Date.now() + 800;
     excalidrawAPI.scrollToContent(excalidrawAPI.getSceneElements(), { fitToContent: true, animate: true });
   }
 
