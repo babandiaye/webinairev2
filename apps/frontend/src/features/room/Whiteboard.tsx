@@ -31,6 +31,13 @@ export function Whiteboard({ roomId, canManage }: { roomId: string; canManage: b
   // sendDraw échoue silencieusement (pas de retour d'erreur exploité) — les
   // autres participants restent alors figés sur un état obsolète.
   const lastSentVersionsRef = useRef(new Map<string, number>());
+  // Un spectateur (viewModeEnabled) suit par défaut le dessin du modérateur :
+  // chaque delta reçu recadre sa caméra pour garder l'ensemble du dessin
+  // visible, plutôt que de ne cadrer qu'une seule fois à l'ouverture — sinon,
+  // dès que le modérateur étend son dessin au-delà du cadrage initial, une
+  // partie part hors champ sur un écran mobile étroit. Jamais utilisé côté
+  // modérateur (sa caméra n'est jamais touchée automatiquement).
+  const followViewportRef = useRef(true);
 
   // Seul le modérateur diffuse : les autres sont de toute façon en lecture
   // seule côté UI (viewModeEnabled), mais un client modifié pourrait quand même
@@ -56,19 +63,16 @@ export function Whiteboard({ roomId, canManage }: { roomId: string; canManage: b
       const { elements } = JSON.parse(new TextDecoder().decode(msg.payload)) as {
         elements: RemoteExcalidrawElement[];
       };
-      const wasEmpty = excalidrawAPI.getSceneElements().length === 0;
       const reconciled = reconcileElements(
         excalidrawAPI.getSceneElements(),
         elements,
         excalidrawAPI.getAppState()
       );
       excalidrawAPI.updateScene({ elements: reconciled, captureUpdate: CaptureUpdateAction.NEVER });
-      // Un participant qui a ouvert le tableau blanc AVANT que le modérateur ne
-      // commence à dessiner n'a jamais eu de contenu à cadrer via loadSnapshot
-      // (scène vide au chargement) — sans ce recentrage ponctuel au premier
-      // trait reçu, sa caméra locale reste à sa position par défaut, qui peut
-      // n'avoir aucun rapport avec l'endroit où le modérateur dessine.
-      if (wasEmpty && reconciled.length > 0) {
+      // Recadrage continu pour un spectateur qui suit encore le dessin (voir
+      // followViewportRef) — jamais pour le modérateur, dont la caméra ne doit
+      // jamais être touchée automatiquement pendant qu'il dessine.
+      if (!canManage && followViewportRef.current && reconciled.length > 0) {
         excalidrawAPI.scrollToContent(reconciled, { fitToContent: true, animate: false });
       }
     } catch {
@@ -104,13 +108,18 @@ export function Whiteboard({ roomId, canManage }: { roomId: string; canManage: b
           // existant se trouve réellement sur le canevas infini. Symptôme observé :
           // un participant qui ouvre le tableau blanc en cours de session ne voit
           // qu'un fragment minuscule et décentré de ce que le modérateur a dessiné.
-          if (elements.length > 0) {
+          // Pour le modérateur (qui rejoint une scène existante), toujours cadrer —
+          // sa caméra n'est de toute façon jamais recadrée ensuite. Pour un
+          // spectateur, seulement s'il suit encore le dessin (followViewportRef) :
+          // un resync réseau (RoomEvent.Reconnected) ne doit pas lui arracher la
+          // caméra s'il l'avait déjà déplacée avant la coupure.
+          if (elements.length > 0 && (canManage || followViewportRef.current)) {
             excalidrawAPI.scrollToContent(elements, { fitToContent: true, animate: false });
           }
         }
       })
       .catch(() => {});
-  }, [excalidrawAPI, roomId]);
+  }, [excalidrawAPI, roomId, canManage]);
 
   // Ne recharge l'instantané serveur qu'une seule fois par ouverture — sinon,
   // si excalidrawAPI change de référence pendant que quelqu'un écrit (Excalidraw
