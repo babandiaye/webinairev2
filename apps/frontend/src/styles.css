@@ -2121,6 +2121,25 @@ button.stat-card:hover {
     left: 14px;
     right: 14px;
   }
+
+  /* La toolbar/le panneau de propriétés d'Excalidraw s'adaptent déjà tout
+     seuls sous ~730px de large (UI mobile intégrée à la librairie) — seul
+     notre habillage maison (header, bouton fermer) a besoin d'un ajustement
+     ici. overscroll-behavior évite qu'un pan sur le canvas déclenche le
+     pull-to-refresh de Safari iOS. */
+  .whiteboard-overlay {
+    overscroll-behavior: contain;
+  }
+  .whiteboard-header {
+    padding: 6px 10px;
+    font-size: 0.8rem;
+  }
+  .whiteboard-header .icon-btn {
+    min-width: 40px;
+    min-height: 40px;
+    align-items: center;
+    justify-content: center;
+  }
 }
 
 /* ── Salle : réglages audio/vidéo (CallSettingsModal) ── */

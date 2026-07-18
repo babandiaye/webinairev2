@@ -28,10 +28,13 @@ function EgressRecordingSignal() {
   useEffect(() => {
     if (connectionState !== ConnectionState.Connected || started.current) return;
     started.current = true;
-    // setRoom AVANT startRecording : d'après la doc du SDK, ça permet aussi au
-    // helper d'émettre END_RECORDING automatiquement quand tous les autres
-    // participants ont quitté la salle — finalisation propre du MP4 même si la
-    // salle se ferme brutalement, en complément (pas en remplacement) du
+    // setRoom AVANT startRecording : d'après le code source du SDK (pas
+    // seulement sa doc, qui est imprécise sur ce point), setRoom() abonne
+    // EgressHelper.endRecording à RoomEvent.Disconnected DE LA CONNEXION DU
+    // RECORDER LUI-MÊME — pas directement "quand les autres participants
+    // partent". En pratique les deux se rejoignent souvent (emptyTimeout finit
+    // par déconnecter une salle vidée), mais le déclencheur réel est bien la
+    // déconnexion de CETTE room, en complément (pas en remplacement) du
     // garde-fou room_finished déjà en place côté webhook.
     EgressHelper.setRoom(room);
     EgressHelper.startRecording();

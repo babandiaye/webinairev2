@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { PhoneOff, Users, Video } from "lucide-react";
 import { ConnectionQualityIndicator, useLocalParticipant, useParticipants, useRoomContext } from "@livekit/components-react";
 import { api } from "../../api/client";
@@ -37,13 +37,28 @@ export function CallTopBar({
   const room = useRoomContext();
   const [error, setError] = useState<string | null>(null);
 
-  // Chronomètre tenu à jour uniquement pendant la capture effective (ACTIVE).
-  // Pendant ENDING, cet effet ne fait rien : elapsedSeconds garde volontairement
-  // sa dernière valeur ACTIVE (chrono "figé") plutôt que d'être remis à zéro.
+  // Ancre le chrono ACTIVE sur l'horloge du NAVIGATEUR au moment où CE client
+  // détecte le passage à ACTIVE pour cet enregistrement précis — pas sur
+  // startedAt (horloge du serveur). L'horloge du serveur peut être décalée
+  // (dérive NTP en cours côté infra, voir docs/RUNBOOK.md) sans qu'on puisse
+  // la corriger depuis le frontend ; comparer deux horloges différentes ferait
+  // apparaître un chrono qui "démarre déjà en avance" du montant du décalage.
+  // Ainsi le chrono affiche toujours 00:00 pile au moment où "Enregistrement
+  // en cours" s'affiche pour ce client, quel que soit l'état des horloges.
+  // Contrepartie assumée : un client qui recharge la page en pleine capture,
+  // ou qui apprend l'état ACTIVE avec un peu de retard (polling/push), perd
+  // ce repère et repart de 00:00 à cet instant plutôt que de rattraper le
+  // temps déjà écoulé — préférable à un chrono qui saute en avant au hasard
+  // du décalage d'horloge.
+  const activeRecordingIdRef = useRef<string | null>(null);
+  const clientActiveSinceRef = useRef<number | null>(null);
+
   useEffect(() => {
     if (!activeRecording) {
       setElapsedSeconds(0);
       setStartingTooLong(false);
+      activeRecordingIdRef.current = null;
+      clientActiveSinceRef.current = null;
       return;
     }
 
@@ -57,16 +72,20 @@ export function CallTopBar({
       return () => clearInterval(interval);
     }
 
-    if (activeRecording.status === "ACTIVE" && activeRecording.startedAt) {
-      const startedAt = new Date(activeRecording.startedAt).getTime();
+    if (activeRecording.status === "ACTIVE") {
+      if (activeRecordingIdRef.current !== activeRecording.id) {
+        activeRecordingIdRef.current = activeRecording.id;
+        clientActiveSinceRef.current = Date.now();
+      }
+      const clientActiveSince = clientActiveSinceRef.current!;
       function tick() {
-        setElapsedSeconds(Math.max(0, Math.floor((Date.now() - startedAt) / 1000)));
+        setElapsedSeconds(Math.max(0, Math.floor((Date.now() - clientActiveSince) / 1000)));
       }
       tick();
       const interval = setInterval(tick, 1000);
       return () => clearInterval(interval);
     }
-  }, [activeRecording?.status, activeRecording?.startedAt, activeRecording?.createdAt]);
+  }, [activeRecording?.status, activeRecording?.createdAt, activeRecording?.id]);
 
   // Distinct de "Quitter" (CallControlBar, accessible à tout le monde y compris
   // au modérateur) : celui-ci termine la réunion pour TOUT LE MONDE, geste

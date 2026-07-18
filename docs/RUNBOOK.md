@@ -47,6 +47,12 @@ pnpm --filter @webinairev2/frontend build   # lit apps/frontend/.env (VITE_*)
 # rien d'autre à faire : nginx sert directement apps/frontend/dist/
 ```
 
+`shared-types` a `"main": "dist/index.js"` (pas la source `.ts`) — après un `git pull`,
+`pnpm --filter @webinairev2/shared-types build` doit avoir tourné au moins une
+fois avant `pnpm dev` (backend ou frontend), sinon la résolution du package
+échoue dès qu'un import qui n'est pas qu'un type (ex. `RECORDING_CONTROL_TOPIC`)
+est utilisé.
+
 ### Migrations Prisma
 
 ```bash

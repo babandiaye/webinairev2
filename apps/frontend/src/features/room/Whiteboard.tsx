@@ -56,12 +56,21 @@ export function Whiteboard({ roomId, canManage }: { roomId: string; canManage: b
       const { elements } = JSON.parse(new TextDecoder().decode(msg.payload)) as {
         elements: RemoteExcalidrawElement[];
       };
+      const wasEmpty = excalidrawAPI.getSceneElements().length === 0;
       const reconciled = reconcileElements(
         excalidrawAPI.getSceneElements(),
         elements,
         excalidrawAPI.getAppState()
       );
       excalidrawAPI.updateScene({ elements: reconciled, captureUpdate: CaptureUpdateAction.NEVER });
+      // Un participant qui a ouvert le tableau blanc AVANT que le modérateur ne
+      // commence à dessiner n'a jamais eu de contenu à cadrer via loadSnapshot
+      // (scène vide au chargement) — sans ce recentrage ponctuel au premier
+      // trait reçu, sa caméra locale reste à sa position par défaut, qui peut
+      // n'avoir aucun rapport avec l'endroit où le modérateur dessine.
+      if (wasEmpty && reconciled.length > 0) {
+        excalidrawAPI.scrollToContent(reconciled, { fitToContent: true, animate: false });
+      }
     } catch {
       // message malformé ignoré
     }
@@ -90,6 +99,14 @@ export function Whiteboard({ roomId, canManage }: { roomId: string; canManage: b
         if (elements) {
           excalidrawAPI.updateScene({ elements, captureUpdate: CaptureUpdateAction.NEVER });
           lastSentVersionsRef.current = new Map(elements.map((el) => [el.id, el.version]));
+          // Sans ça, la caméra (zoom/défilement) de ce client reste à sa position
+          // par défaut au chargement — sans rapport avec l'endroit où le dessin
+          // existant se trouve réellement sur le canevas infini. Symptôme observé :
+          // un participant qui ouvre le tableau blanc en cours de session ne voit
+          // qu'un fragment minuscule et décentré de ce que le modérateur a dessiné.
+          if (elements.length > 0) {
+            excalidrawAPI.scrollToContent(elements, { fitToContent: true, animate: false });
+          }
         }
       })
       .catch(() => {});
@@ -123,6 +140,24 @@ export function Whiteboard({ roomId, canManage }: { roomId: string; canManage: b
       room.off(RoomEvent.Reconnected, loadSnapshot);
     };
   }, [room, open, loadSnapshot]);
+
+  // Désactive le pinch-zoom NATIF du navigateur tant que le tableau blanc est
+  // ouvert (restauré à la fermeture) — Excalidraw a son propre zoom/pan
+  // tactile, et laisser le navigateur zoomer la page EN PLUS désynchronise le
+  // viewport visuel de celui utilisé pour placer les traits sur mobile :
+  // symptôme observé, un trait apparaît décalé tant qu'on n'a pas pincé pour
+  // forcer un recalcul. C'est exactement le réglage qu'utilise excalidraw.com
+  // lui-même (meta viewport avec maximum-scale=1,user-scalable=no).
+  useEffect(() => {
+    if (!open) return;
+    const meta = document.querySelector('meta[name="viewport"]');
+    if (!meta) return;
+    const original = meta.getAttribute("content");
+    if (original) meta.setAttribute("content", `${original}, maximum-scale=1, user-scalable=no`);
+    return () => {
+      if (original) meta.setAttribute("content", original);
+    };
+  }, [open]);
 
   const handleChange = useCallback(
     (elements: readonly OrderedExcalidrawElement[]) => {
@@ -190,6 +225,20 @@ export function Whiteboard({ roomId, canManage }: { roomId: string; canManage: b
           excalidrawAPI={(a) => setExcalidrawAPI(a)}
           onChange={handleChange}
           viewModeEnabled={!canManage}
+          // Réduit le menu (utile surtout sur l'UI mobile d'Excalidraw, plus
+          // contrainte en place) et retire des actions inadaptées à une scène
+          // partagée en direct : loadScene écraserait le dessin de tout le
+          // monde avec un fichier local sans repasser par la synchronisation,
+          // export/saveToActiveFile n'ont pas de sens ici (rien à exporter
+          // vers un fichier local pour une session collaborative éphémère).
+          UIOptions={{
+            canvasActions: {
+              loadScene: false,
+              export: false,
+              saveToActiveFile: false,
+              toggleTheme: null,
+            },
+          }}
         />
       </div>
     </div>

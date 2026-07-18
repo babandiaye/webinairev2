@@ -87,16 +87,23 @@ export function RecordingsPage() {
                 <span className={`status-badge status-${STATUS_BADGE_CLASS[rec.status]}`}>
                   {STATUS_LABELS[rec.status]}
                 </span>
-                {rec.status === "READY" && (
+                {/* Lire/Télécharger seulement si READY (rien à lire pour un échec) —
+                    mais Supprimer reste utile aussi pour un enregistrement FAILED,
+                    sinon il n'y a aucun moyen de nettoyer la liste depuis l'UI. */}
+                {(rec.status === "READY" || rec.status === "FAILED") && (
                   <div className="recording-actions">
-                    <button className="btn btn-ghost" onClick={() => handlePlay(rec.id)}>
-                      <Play size={15} />
-                      Lire
-                    </button>
-                    <button className="btn btn-primary" onClick={() => handleDownload(rec.id)}>
-                      <Download size={15} />
-                      Télécharger
-                    </button>
+                    {rec.status === "READY" && (
+                      <>
+                        <button className="btn btn-ghost" onClick={() => handlePlay(rec.id)}>
+                          <Play size={15} />
+                          Lire
+                        </button>
+                        <button className="btn btn-primary" onClick={() => handleDownload(rec.id)}>
+                          <Download size={15} />
+                          Télécharger
+                        </button>
+                      </>
+                    )}
                     <button
                       className="btn btn-danger"
                       onClick={() => handleDelete(rec.id)}
