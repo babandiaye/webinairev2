@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { X } from "lucide-react";
+import { Focus, X } from "lucide-react";
 import { Excalidraw, reconcileElements, CaptureUpdateAction } from "@excalidraw/excalidraw";
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 import type { RemoteExcalidrawElement } from "@excalidraw/excalidraw/data/reconcile";
@@ -230,6 +230,16 @@ export function Whiteboard({ roomId, canManage }: { roomId: string; canManage: b
     []
   );
 
+  // Réengage le suivi automatique (Correctif 2 l'a désengagé) et recadre
+  // immédiatement sur l'état actuel du dessin — seul moyen pour un spectateur
+  // de revenir à une vue complète après avoir pan/zoomé lui-même.
+  function handleRecenter() {
+    if (!excalidrawAPI) return;
+    followViewportRef.current = true;
+    justFitRef.current = true;
+    excalidrawAPI.scrollToContent(excalidrawAPI.getSceneElements(), { fitToContent: true, animate: true });
+  }
+
   async function handleClose() {
     try {
       await api.setWhiteboardState(roomId, { open: false });
@@ -246,6 +256,11 @@ export function Whiteboard({ roomId, canManage }: { roomId: string; canManage: b
     <div className="whiteboard-overlay">
       <div className="whiteboard-header">
         <span>Tableau blanc{!canManage && " — lecture seule"}</span>
+        {!canManage && (
+          <button className="icon-btn" onClick={handleRecenter} title="Recadrer sur le dessin">
+            <Focus size={18} />
+          </button>
+        )}
         {canManage && (
           <button className="icon-btn" onClick={handleClose} title="Fermer pour tout le monde">
             <X size={18} />
