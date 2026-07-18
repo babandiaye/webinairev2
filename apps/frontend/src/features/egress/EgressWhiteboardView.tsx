@@ -45,6 +45,13 @@ export function EgressWhiteboardView({ roomId, token }: { roomId: string; token:
         excalidrawAPI.getAppState()
       );
       excalidrawAPI.updateScene({ elements: reconciled, captureUpdate: CaptureUpdateAction.NEVER });
+      // Contrairement à Whiteboard.tsx (côté salle), pas de spectateur humain
+      // ici donc pas de suivi désengageable ni de bouton de recadrage — on
+      // recadre systématiquement sur chaque delta pour que l'enregistrement
+      // vidéo garde tout le dessin dans le champ, quelle que soit son étendue.
+      if (reconciled.length > 0) {
+        excalidrawAPI.scrollToContent(reconciled, { fitToContent: true, animate: false });
+      }
     } catch {
       // message malformé ignoré
     }
@@ -73,6 +80,9 @@ export function EgressWhiteboardView({ roomId, token }: { roomId: string; token:
         const elements = (snapshot.sceneData as { elements?: OrderedExcalidrawElement[] } | null)?.elements;
         if (elements) {
           excalidrawAPI.updateScene({ elements, captureUpdate: CaptureUpdateAction.NEVER });
+          if (elements.length > 0) {
+            excalidrawAPI.scrollToContent(elements, { fitToContent: true, animate: false });
+          }
         }
       })
       .catch(() => {});
