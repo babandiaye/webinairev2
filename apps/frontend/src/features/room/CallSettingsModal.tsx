@@ -1,5 +1,8 @@
+import { useState } from "react";
 import { Camera, Check, Mic, RefreshCw, Volume2, X } from "lucide-react";
 import { useMediaDeviceSelect } from "@livekit/components-react";
+import { RoomDto, UpdateRoomSettingsDto } from "@webinairev2/shared-types";
+import { api } from "../../api/client";
 
 function DeviceSection({
   kind,
@@ -39,11 +42,70 @@ function DeviceSection({
   );
 }
 
+// Ligne interrupteur "Verrouiller X" — réutilise le style .theme-switch déjà
+// défini pour le mode sombre (Sidebar.tsx), pas de nouveau composant toggle.
+function LockToggle({
+  label,
+  locked,
+  busy,
+  onChange,
+}: {
+  label: string;
+  locked: boolean;
+  busy: boolean;
+  onChange: (locked: boolean) => void;
+}) {
+  return (
+    <div className="call-settings-lock-row">
+      <span>{label}</span>
+      <button
+        className={`theme-switch ${locked ? "on" : ""}`}
+        onClick={() => onChange(!locked)}
+        disabled={busy}
+        aria-label={label}
+      />
+    </div>
+  );
+}
+
 // Regroupe caméra/microphone/haut-parleur en un seul endroit — remplace les
 // petits menus déroulants auparavant accolés individuellement aux boutons
 // micro/caméra de CallControlBar (redondant une fois ce panneau en place).
-export function CallSettingsModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+// La section "Session" (verrouillage micro/caméra pour les participants)
+// n'est affichée que pour l'animateur (canManage) — un participant n'a pas
+// son mot à dire sur cette politique, seulement sur ses propres périphériques.
+export function CallSettingsModal({
+  open,
+  onClose,
+  roomId,
+  canManage,
+  room,
+  onRoomUpdate,
+}: {
+  open: boolean;
+  onClose: () => void;
+  roomId: string;
+  canManage: boolean;
+  room: RoomDto;
+  onRoomUpdate: (room: RoomDto) => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
   if (!open) return null;
+
+  async function updateSettings(dto: UpdateRoomSettingsDto) {
+    setBusy(true);
+    setError(null);
+    try {
+      const updated = await api.updateRoomSettings(roomId, dto);
+      onRoomUpdate(updated);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Erreur inconnue");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   return (
     <div className="call-settings-backdrop" onClick={onClose}>
@@ -66,6 +128,25 @@ export function CallSettingsModal({ open, onClose }: { open: boolean; onClose: (
             </button>
           </div>
         </div>
+
+        {canManage && (
+          <div className="call-settings-section">
+            <div className="call-settings-section-title">Session</div>
+            <LockToggle
+              label="Verrouiller les micros"
+              locked={room.micLocked}
+              busy={busy}
+              onChange={(micLocked) => updateSettings({ micLocked })}
+            />
+            <LockToggle
+              label="Verrouiller les caméras"
+              locked={room.cameraLocked}
+              busy={busy}
+              onChange={(cameraLocked) => updateSettings({ cameraLocked })}
+            />
+            {error && <p className="call-settings-error">{error}</p>}
+          </div>
+        )}
 
         <DeviceSection kind="videoinput" label="Caméra" icon={<Camera size={15} />} />
         <DeviceSection kind="audioinput" label="Microphone (entrée)" icon={<Mic size={15} />} />

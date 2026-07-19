@@ -84,6 +84,13 @@ model Room {
   // Le tableau blanc est une session partagée : ouvert/fermé pour tout le monde
   // à la fois (pas un état d'affichage local par participant).
   whiteboardOpen        Boolean    @default(false)
+  // Réglages "Session" (panneau Paramètres, visible seulement de l'animateur) —
+  // par défaut true (verrouillé) pour préserver le comportement actuel : micro
+  // accordé individuellement, caméra jamais accordée aux participants tant que
+  // l'animateur ne déverrouille pas explicitement (voir LiveKitTokenService.
+  // createRoomToken et RoomsService.updateSettings).
+  micLocked              Boolean    @default(true)
+  cameraLocked           Boolean    @default(true)
   // Rempli uniquement pour une Room créée depuis le plugin Moodle (mod_webinairev2) —
   // moodleMeetingId identifie l'instance d'activité de façon unique et sert de clé
   // d'idempotence (POST /moodle/rooms ne doit jamais créer deux Room pour la même

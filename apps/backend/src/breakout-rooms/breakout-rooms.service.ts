@@ -139,6 +139,8 @@ export class BreakoutRoomsService {
       name: user.name,
       role: user.role,
       isModerator: isManager,
+      micLocked: breakout.micLocked,
+      cameraLocked: breakout.cameraLocked,
     });
 
     return {
@@ -221,6 +223,8 @@ export class BreakoutRoomsService {
       endedAt: room.endedAt?.toISOString() ?? null,
       canManage,
       isMoodle: room.moodleMeetingId !== null,
+      micLocked: room.micLocked,
+      cameraLocked: room.cameraLocked,
     };
   }
 }

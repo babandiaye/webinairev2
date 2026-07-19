@@ -25,6 +25,7 @@ import type {
   StatsRange,
   SystemStatusDto,
   UpdateRoleDto,
+  UpdateRoomSettingsDto,
   UserDto,
   VotePollDto,
   WhiteboardSnapshotDto,
@@ -62,6 +63,8 @@ export const api = {
     request<RoomDto>("/rooms", { method: "POST", body: JSON.stringify(dto) }),
   joinRoom: (roomId: string) => request<JoinRoomResponseDto>(`/rooms/${roomId}/join`, { method: "POST" }),
   closeRoom: (roomId: string) => request<RoomDto>(`/rooms/${roomId}/close`, { method: "POST" }),
+  updateRoomSettings: (roomId: string, dto: UpdateRoomSettingsDto) =>
+    request<RoomDto>(`/rooms/${roomId}/settings`, { method: "PATCH", body: JSON.stringify(dto) }),
   deleteRoom: (roomId: string) => request<void>(`/rooms/${roomId}`, { method: "DELETE" }),
   muteParticipant: (roomId: string, identity: string) =>
     request<{ ok: true }>(`/rooms/${roomId}/participants/${encodeURIComponent(identity)}/mute`, { method: "POST" }),

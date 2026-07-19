@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, Post, UseGuards } from "@nestjs/common";
+import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, UseGuards } from "@nestjs/common";
 import { Role } from "@prisma/client";
 import { SessionAuthGuard } from "../auth/session-auth.guard";
 import { RolesGuard } from "../auth/roles.guard";
@@ -9,6 +9,7 @@ import { RoomAccessGuard, RequireRoomAccess } from "./room-access.guard";
 import { RoomsService } from "./rooms.service";
 import { CreateRoomDto } from "./dto/create-room.dto";
 import { SetParticipantPermissionDto } from "./dto/set-participant-permission.dto";
+import { UpdateRoomSettingsDto } from "./dto/update-room-settings.dto";
 
 @Controller("rooms")
 @UseGuards(SessionAuthGuard, RolesGuard, RoomAccessGuard)
@@ -40,6 +41,12 @@ export class RoomsController {
   @RequireRoomAccess()
   close(@Param("id") id: string) {
     return this.rooms.close(id);
+  }
+
+  @Patch(":id/settings")
+  @RequireRoomAccess()
+  updateSettings(@Param("id") id: string, @Body() dto: UpdateRoomSettingsDto) {
+    return this.rooms.updateSettings(id, dto);
   }
 
   @Delete(":id")

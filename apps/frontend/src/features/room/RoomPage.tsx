@@ -98,7 +98,10 @@ export function RoomPage() {
   }
   if (!activeConnection || !id || !user) return <div className="loading-screen">Connexion à la salle…</div>;
 
-  const canManage = user.role === "ADMIN" || user.id === activeConnection.room.creatorId;
+  // room.canManage est calculé côté serveur (créateur, admin, ou co-modérateur
+  // inscrit — voir EnrollmentsService.canManageRoom) : le recalculer localement
+  // à partir de creatorId seul (ancien code) ignorait à tort les co-modérateurs.
+  const canManage = activeConnection.room.canManage;
   const isInBreakout = activeConnection.room.type === "BREAKOUT";
 
   async function handleJoinBreakout(breakoutId: string) {
@@ -254,7 +257,14 @@ export function RoomPage() {
         </div>
       </div>
 
-      <CallSettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+      <CallSettingsModal
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        roomId={activeConnection.room.id}
+        canManage={canManage && !isInBreakout}
+        room={activeConnection.room}
+        onRoomUpdate={(room) => setActiveConnection((prev) => (prev ? { ...prev, room } : prev))}
+      />
 
       <RoomAudioRenderer />
       <StartAudio label="Cliquer pour activer le son" />

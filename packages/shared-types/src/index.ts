@@ -33,6 +33,15 @@ export interface RoomDto {
   // true si la salle a été créée depuis le plugin Moodle (mod_webinairev2) —
   // purement informatif (badge), n'affecte plus les règles de visibilité.
   isMoodle: boolean;
+  // Réglages "Session" (panneau Paramètres, visible seulement si canManage) —
+  // true = verrouillé (comportement par défaut), voir livekit-token.service.ts.
+  micLocked: boolean;
+  cameraLocked: boolean;
+}
+
+export interface UpdateRoomSettingsDto {
+  micLocked?: boolean;
+  cameraLocked?: boolean;
 }
 
 export interface CreateRoomDto {

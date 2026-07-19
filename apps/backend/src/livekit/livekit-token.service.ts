@@ -1,6 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import { AccessToken } from "livekit-server-sdk";
+import { AccessToken, TrackSource } from "livekit-server-sdk";
 import { Role } from "@prisma/client";
 
 @Injectable()
@@ -18,8 +18,15 @@ export class LiveKitTokenService {
     // n'a jamais été promu (cas d'un enseignant Moodle jamais touché par un admin
     // via /users/:id/role) — voir MoodleService.
     isModerator: boolean;
+    // Réglages "Session" de la salle (voir RoomsService.updateSettings) —
+    // ignorés si isModerator (un modérateur publie toujours sans restriction).
+    // true (verrouillé) reproduit le comportement historique : caméra jamais
+    // accordée par défaut, micro à accorder individuellement via
+    // setSpeakerPermission.
+    micLocked: boolean;
+    cameraLocked: boolean;
   }): Promise<string> {
-    const { roomName, identity, name, role, isModerator } = params;
+    const { roomName, identity, name, role, isModerator, micLocked, cameraLocked } = params;
 
     const at = new AccessToken(
       this.config.get<string>("livekit.apiKey")!,
@@ -32,10 +39,20 @@ export class LiveKitTokenService {
       { identity, name, ttl: "10h", metadata: JSON.stringify({ role, isModerator }) }
     );
 
+    const sources = [
+      ...(!micLocked ? [TrackSource.MICROPHONE] : []),
+      ...(!cameraLocked ? [TrackSource.CAMERA] : []),
+    ];
+
     at.addGrant({
       room: roomName,
       roomJoin: true,
-      canPublish: isModerator,
+      canPublish: isModerator || sources.length > 0,
+      // undefined (pas de restriction) pour un modérateur ; pour un participant,
+      // seules les sources déverrouillées côté salle sont accordées d'entrée —
+      // le reste (ou tout en cas de verrouillage complet) passe par un octroi
+      // individuel ponctuel, voir setSpeakerPermission.
+      canPublishSources: isModerator ? undefined : sources,
       canSubscribe: true,
       canPublishData: true,
       // Un modérateur peut muter/kicker d'autres participants ; un viewer ne peut

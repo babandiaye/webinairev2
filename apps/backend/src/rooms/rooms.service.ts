@@ -12,6 +12,7 @@ import { BreakoutRoomsService } from "../breakout-rooms/breakout-rooms.service";
 import { PresentationsService } from "../presentations/presentations.service";
 import { S3Service } from "../storage/s3.service";
 import { EnrollmentsService } from "../enrollments/enrollments.service";
+import { UpdateRoomSettingsDto } from "./dto/update-room-settings.dto";
 
 @Injectable()
 export class RoomsService {
@@ -133,6 +134,8 @@ export class RoomsService {
       name: user.name,
       role: user.role,
       isModerator,
+      micLocked: room.micLocked,
+      cameraLocked: room.cameraLocked,
     });
 
     return {
@@ -339,6 +342,67 @@ export class RoomsService {
     }
   }
 
+  // Réglages "Session" (panneau Paramètres, animateur uniquement — voir
+  // RoomAccessGuard via @RequireRoomAccess sur le contrôleur). S'applique en
+  // direct aux participants déjà connectés (pas seulement aux prochains
+  // arrivants), voir applySettingsToConnectedParticipants ci-dessous.
+  async updateSettings(id: string, dto: UpdateRoomSettingsDto): Promise<RoomDto> {
+    const room = await this.prisma.room.update({
+      where: { id },
+      data: {
+        ...(dto.micLocked !== undefined && { micLocked: dto.micLocked }),
+        ...(dto.cameraLocked !== undefined && { cameraLocked: dto.cameraLocked }),
+      },
+    });
+
+    await this.applySettingsToConnectedParticipants(room);
+
+    // Route déjà gardée par RoomAccessGuard : seul un gestionnaire de la salle
+    // atteint ce point.
+    return this.toDto(room, true);
+  }
+
+  // Pousse la politique micro/caméra résultante à tous les participants déjà
+  // connectés — même schéma que updatePublishSources (relit canPublishSources
+  // avant de le modifier, jamais un remplacement complet), mais pour tout le
+  // monde à la fois plutôt qu'un seul identity ciblé. Un verrouillage retire
+  // aussi le micro/la caméra à un participant qui l'avait obtenu
+  // individuellement via setSpeakerPermission — un verrou est une contrainte
+  // dure, pas seulement une valeur par défaut.
+  private async applySettingsToConnectedParticipants(room: Room): Promise<void> {
+    let participants: Awaited<ReturnType<typeof this.livekitClients.roomService.listParticipants>>;
+    try {
+      participants = await this.livekitClients.roomService.listParticipants(room.roomName);
+    } catch {
+      // Salle LiveKit introuvable (personne connecté) : rien à pousser.
+      return;
+    }
+
+    for (const participant of participants) {
+      let isModerator = false;
+      try {
+        isModerator = participant.metadata ? JSON.parse(participant.metadata).isModerator === true : false;
+      } catch {
+        // metadata malformée ignorée — traité comme non-modérateur
+      }
+      if (isModerator) continue;
+
+      const current = new Set(participant.permission?.canPublishSources ?? []);
+      if (room.micLocked) current.delete(TrackSource.MICROPHONE);
+      else current.add(TrackSource.MICROPHONE);
+      if (room.cameraLocked) current.delete(TrackSource.CAMERA);
+      else current.add(TrackSource.CAMERA);
+      const canPublishSources = Array.from(current);
+
+      await this.livekitClients.roomService.updateParticipant(room.roomName, participant.identity, undefined, {
+        canSubscribe: true,
+        canPublishData: true,
+        canPublish: canPublishSources.length > 0,
+        canPublishSources,
+      });
+    }
+  }
+
   private toDto(room: Room, canManage: boolean): RoomDto {
     return {
       id: room.id,
@@ -352,6 +416,8 @@ export class RoomsService {
       endedAt: room.endedAt?.toISOString() ?? null,
       canManage,
       isMoodle: room.moodleMeetingId !== null,
+      micLocked: room.micLocked,
+      cameraLocked: room.cameraLocked,
     };
   }
 }
