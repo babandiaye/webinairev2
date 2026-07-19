@@ -153,7 +153,7 @@ export function HomePage() {
       <div className="dashboard-grid">
         <div className="panel">
           <div className="panel-header">
-            <h3>Réunions récentes</h3>
+            <h3>Cours récents</h3>
           </div>
 
           {filteredRooms.length === 0 ? (
