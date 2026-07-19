@@ -1,4 +1,5 @@
 import type {
+  ActivityStatsDto,
   AdminUserDto,
   AssignBreakoutDto,
   AttendanceSessionGroupDto,
@@ -18,6 +19,7 @@ import type {
   RecordingWithRoomDto,
   RoomDto,
   SetCurrentSlideDto,
+  StatsRange,
   SystemStatusDto,
   UpdateRoleDto,
   UserDto,
@@ -101,6 +103,8 @@ export const api = {
   csvTemplateUrl: `${API_URL}/users/csv-template`,
 
   getSystemStatus: () => request<SystemStatusDto>("/status"),
+
+  getActivityStats: (range: StatsRange) => request<ActivityStatsDto>(`/stats/activity?range=${range}`),
   async importUsersCsv(file: File): Promise<CsvImportSummaryDto> {
     const form = new FormData();
     form.append("file", file);

@@ -2390,3 +2390,69 @@ button.stat-card:hover {
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
+
+/* ---------- Planifier un cours magistral (/schedule) ---------- */
+
+.schedule-panel {
+  max-width: 480px;
+  margin: 20px auto 0;
+}
+.schedule-panel .create-room-form {
+  flex-direction: column;
+  align-items: stretch;
+}
+.schedule-panel .create-room-form input {
+  padding: 12px 14px;
+}
+.schedule-panel .create-room-form button {
+  justify-content: center;
+}
+
+/* ---------- Activité (tableau de bord) ---------- */
+
+.range-toggle {
+  display: flex;
+  gap: 2px;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 2px;
+}
+.range-toggle button {
+  border: none;
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 5px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.range-toggle button.active {
+  background: var(--color-surface);
+  color: var(--color-primary);
+  box-shadow: var(--shadow);
+}
+
+.activity-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 20px;
+}
+.activity-chart {
+  display: flex;
+  flex-direction: column;
+}
+.activity-chart-value {
+  font-size: 1.3rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.activity-chart-label {
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+  margin-bottom: 10px;
+}
+.bar-chart {
+  color: var(--color-primary);
+}

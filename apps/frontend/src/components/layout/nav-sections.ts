@@ -25,7 +25,7 @@ export const NAV_SECTIONS: NavSection[] = [
     title: "Réunions",
     items: [
       { label: "Tableau de bord", icon: LayoutDashboard, to: "/" },
-      { label: "Planifier une réunion", icon: CalendarPlus, to: "/" },
+      { label: "Planifier un cours magistral", icon: CalendarPlus, to: "/schedule" },
     ],
   },
   {

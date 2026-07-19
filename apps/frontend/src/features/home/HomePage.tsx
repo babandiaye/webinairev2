@@ -1,14 +1,24 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { CalendarPlus, Radio, CheckCircle2, DoorOpen, Users, Video, ClipboardList, Trash2, UserCog } from "lucide-react";
-import { RoomDto } from "@webinairev2/shared-types";
+import { ActivityStatsDto, RoomDto, StatsRange } from "@webinairev2/shared-types";
 import { useAuth } from "../../auth/AuthProvider";
 import { api } from "../../api/client";
 import { StatusBadge } from "../../components/ui/StatusBadge";
 import { StatCard } from "../../components/ui/StatCard";
 import { DashboardLayout } from "../../components/layout/DashboardLayout";
+import { BarChart } from "../../components/charts/BarChart";
 
 const MONTHS = ["JAN", "FÉV", "MAR", "AVR", "MAI", "JUIN", "JUIL", "AOÛT", "SEP", "OCT", "NOV", "DÉC"];
+
+function sum(points: { value: number }[]): number {
+  return points.reduce((acc, p) => acc + p.value, 0);
+}
+
+function formatHours(totalSeconds: number): string {
+  const hours = totalSeconds / 3600;
+  return `${hours.toFixed(hours < 10 ? 1 : 0)} h`;
+}
 
 export function HomePage() {
   const { user } = useAuth();
@@ -19,9 +29,9 @@ export function HomePage() {
   const [userCount, setUserCount] = useState<number | null>(null);
   const [recordingCount, setRecordingCount] = useState<number | null>(null);
   const [search, setSearch] = useState("");
-  const [showCreateForm, setShowCreateForm] = useState(false);
-  const [title, setTitle] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [statsRange, setStatsRange] = useState<StatsRange>("week");
+  const [activityStats, setActivityStats] = useState<ActivityStatsDto | null>(null);
 
   const isAdmin = user?.role === "ADMIN";
 
@@ -65,6 +75,19 @@ export function HomePage() {
     };
   }, [isAdmin]);
 
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .getActivityStats(statsRange)
+      .then((data) => {
+        if (!cancelled) setActivityStats(data);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [statsRange]);
+
   async function handleDeleteRoom(room: RoomDto) {
     if (!confirm(`Supprimer définitivement la salle "${room.title}" ? Les enregistrements associés seront aussi supprimés.`))
       return;
@@ -72,19 +95,6 @@ export function HomePage() {
     try {
       await api.deleteRoom(room.id);
       setRooms((prev) => prev.filter((r) => r.id !== room.id));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Erreur inconnue");
-    }
-  }
-
-  async function handleCreate(e: FormEvent) {
-    e.preventDefault();
-    if (!title.trim()) return;
-    try {
-      const room = await api.createRoom({ title });
-      setRooms((prev) => [room, ...prev]);
-      setTitle("");
-      setShowCreateForm(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erreur inconnue");
     }
@@ -115,7 +125,7 @@ export function HomePage() {
       </div>
 
       <div className="stat-grid">
-        <StatCard label="Salles totales" value={stats.total} icon={DoorOpen} color="#2563eb" />
+        <StatCard label="Salles (CM) totales" value={stats.total} icon={DoorOpen} color="#2563eb" />
         <StatCard label="En direct" value={stats.live} icon={Radio} color="#dc2626" pulse />
         <StatCard label="Terminées" value={stats.ended} icon={CheckCircle2} color="#15803d" />
         {isAdmin && userCount !== null && (
@@ -202,25 +212,11 @@ export function HomePage() {
               <h3>Actions rapides</h3>
             </div>
 
-            {canCreateRoom && showCreateForm && (
-              <form className="create-room-form" onSubmit={handleCreate}>
-                <input
-                  autoFocus
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  placeholder="Titre de la salle"
-                />
-                <button className="btn btn-primary" type="submit" disabled={!title.trim()}>
-                  Créer
-                </button>
-              </form>
-            )}
-
             <div className="quick-actions">
               {canCreateRoom && (
-                <button className="quick-action-btn" onClick={() => setShowCreateForm((v) => !v)}>
+                <button className="quick-action-btn" onClick={() => navigate("/schedule")}>
                   <CalendarPlus size={16} />
-                  Planifier une réunion
+                  Planifier un cours magistral
                 </button>
               )}
               {isAdmin && (
@@ -235,6 +231,51 @@ export function HomePage() {
                   Tous les enregistrements
                 </button>
               )}
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="panel" style={{ marginTop: 20 }}>
+        <div className="panel-header">
+          <h3>Activité</h3>
+          <div className="range-toggle">
+            <button
+              className={statsRange === "week" ? "active" : ""}
+              onClick={() => setStatsRange("week")}
+            >
+              Semaine
+            </button>
+            <button
+              className={statsRange === "month" ? "active" : ""}
+              onClick={() => setStatsRange("month")}
+            >
+              Mois
+            </button>
+          </div>
+        </div>
+
+        {activityStats && (
+          <div className="activity-grid">
+            <div className="activity-chart">
+              <span className="activity-chart-value">{sum(activityStats.rooms)}</span>
+              <span className="activity-chart-label">Cours (CM) créés</span>
+              <BarChart points={activityStats.rooms} />
+            </div>
+            <div className="activity-chart">
+              <span className="activity-chart-value">{sum(activityStats.sessions)}</span>
+              <span className="activity-chart-label">Sessions</span>
+              <BarChart points={activityStats.sessions} />
+            </div>
+            <div className="activity-chart">
+              <span className="activity-chart-value">
+                {formatHours(sum(activityStats.recordingDurationSeconds))}
+              </span>
+              <span className="activity-chart-label">Durée enregistrée</span>
+              <BarChart
+                points={activityStats.recordingDurationSeconds}
+                formatValue={formatHours}
+              />
             </div>
           </div>
         )}

@@ -1,6 +1,7 @@
 import { Route, Routes } from "react-router-dom";
 import { useAuth } from "./auth/AuthProvider";
 import { HomePage } from "./features/home/HomePage";
+import { SchedulePage } from "./features/home/SchedulePage";
 import { RoomPage } from "./features/room/RoomPage";
 import { RecordingsPage } from "./features/recordings/RecordingsPage";
 import { AllRecordingsPage } from "./features/recordings/AllRecordingsPage";
@@ -28,6 +29,14 @@ export function App() {
         element={
           <ProtectedRoute>
             <HomePage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/schedule"
+        element={
+          <ProtectedRoute>
+            <SchedulePage />
           </ProtectedRoute>
         }
       />

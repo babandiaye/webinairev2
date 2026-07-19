@@ -260,3 +260,19 @@ export interface SystemStatusDto {
   host: { cpuLoad1m: number; cpuCount: number; memUsedBytes: number; memTotalBytes: number };
   components: StatusComponentDto[];
 }
+
+// --- Statistiques d'activité (tableau de bord) ---
+
+export type StatsRange = "week" | "month";
+
+export interface ActivityPointDto {
+  date: string; // YYYY-MM-DD
+  value: number;
+}
+
+export interface ActivityStatsDto {
+  range: StatsRange;
+  rooms: ActivityPointDto[]; // cours (salles MAIN) créés par jour
+  sessions: ActivityPointDto[]; // sessions distinctes par jour
+  recordingDurationSeconds: ActivityPointDto[]; // secondes enregistrées par jour
+}

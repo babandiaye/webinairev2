@@ -18,6 +18,7 @@ import { HealthModule } from "./health/health.module";
 import { MoodleModule } from "./moodle/moodle.module";
 import { AttendanceModule } from "./attendance/attendance.module";
 import { StatusModule } from "./status/status.module";
+import { StatsModule } from "./stats/stats.module";
 
 @Module({
   imports: [
@@ -38,6 +39,7 @@ import { StatusModule } from "./status/status.module";
     MoodleModule,
     AttendanceModule,
     StatusModule,
+    StatsModule,
   ],
 })
 export class AppModule {}
