@@ -133,12 +133,18 @@ export class StatusService {
 
   private checkWebhook(): StatusComponentDto {
     const { lastReceivedAt, totalReceived } = this.webhookHealth.getStatus();
-    // Événementiel, pas périodique : jamais "down" à proprement parler — juste
-    // "en attente" tant qu'aucun webhook n'a encore été reçu depuis le démarrage.
+    // Événementiel, pas périodique : ne jamais afficher "degraded"/"down" sur
+    // la seule absence d'événement depuis le démarrage — ça ne prouve rien
+    // (aucune salle active récemment est un état parfaitement normal, pas une
+    // panne). Seule une vraie erreur de vérification de signature webhook
+    // ferait légitimement échouer ce composant, ce que ce check ne couvre pas
+    // ici (voir LiveKitWebhookController, qui rejette déjà ces requêtes en
+    // amont). "up" reste donc le statut par défaut, "jamais" étant juste une
+    // information, pas un verdict.
     return {
       id: "webhook",
       label: "Webhook LiveKit",
-      status: lastReceivedAt ? "up" : "degraded",
+      status: "up" as ComponentHealth,
       details: {
         total: totalReceived,
         lastReceivedAt: lastReceivedAt ? lastReceivedAt.toISOString() : "never",
