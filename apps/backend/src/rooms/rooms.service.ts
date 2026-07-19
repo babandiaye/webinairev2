@@ -44,21 +44,17 @@ export class RoomsService {
   }
 
   // Visibilité par rôle : ADMIN voit tout, les autres voient leurs propres
-  // salles + celles où ils sont inscrits (étudiant ou co-modérateur) — sauf les
-  // salles liées à Moodle (moodleMeetingId non nul), exemptées de cette
-  // restriction pour ne pas casser l'intégration Moodle existante (voir
-  // EnrollmentsService et le commentaire du modèle Enrollment).
+  // salles + celles où ils sont inscrits (étudiant ou co-modérateur) — y compris
+  // les salles liées à Moodle (comme sur livestreamv3), qui sont désormais
+  // synchronisées automatiquement via MoodleService.syncUser (voir
+  // EnrollmentsService.ensureEnrolled), pas seulement les salles créées à la main.
   async list(user: SessionUser): Promise<RoomDto[]> {
     const where =
       user.role === Role.ADMIN
         ? { type: RoomType.MAIN }
         : {
             type: RoomType.MAIN,
-            OR: [
-              { moodleMeetingId: { not: null } },
-              { creatorId: user.id },
-              { enrollments: { some: { userId: user.id } } },
-            ],
+            OR: [{ creatorId: user.id }, { enrollments: { some: { userId: user.id } } }],
           };
 
     const rooms = await this.prisma.room.findMany({
@@ -115,11 +111,10 @@ export class RoomsService {
         });
       }
     } else {
-      // Une salle liée à Moodle reste ouverte à tout utilisateur connecté (le
-      // plugin mod_webinairev2 actuel ne notifie jamais webinairev2 de qui est
-      // inscrit à quel cours Moodle, voir EnrollmentsModule) — seules les salles
-      // créées manuellement exigent une inscription explicite.
-      if (room.moodleMeetingId === null && !(await this.enrollments.isEnrolled(room.id, user.id))) {
+      // Salle Moodle ou non, une inscription est désormais requise (voir
+      // MoodleService.syncUser, qui inscrit automatiquement l'étudiant/
+      // enseignant Moodle avant qu'il n'atteigne cette page).
+      if (!(await this.enrollments.isEnrolled(room.id, user.id))) {
         throw new ForbiddenException("Vous n'êtes pas inscrit à ce cours");
       }
       if (!(await this.hasActiveModerator(room.roomName))) {
@@ -290,11 +285,13 @@ export class RoomsService {
     });
   }
 
-  // "Autoriser la parole" — typiquement en réponse à une main levée. Micro et
-  // caméra ensemble : une fois la parole donnée, le participant n'est plus en
-  // simple écoute, comme un intervenant "non présentateur" sur BBB.
+  // "Autoriser la parole" — typiquement en réponse à une main levée. Micro
+  // uniquement : la caméra reste verrouillée pour un participant quel que soit
+  // son statut d'orateur (aucune action ne l'accorde, voir CallControlBar.tsx
+  // côté frontend) — décision explicite pour limiter la charge vidéo/modération,
+  // contrairement au comportement précédent qui accordait micro+caméra ensemble.
   async setSpeakerPermission(roomId: string, identity: string, grant: boolean): Promise<void> {
-    await this.updatePublishSources(roomId, identity, [TrackSource.MICROPHONE, TrackSource.CAMERA], grant);
+    await this.updatePublishSources(roomId, identity, [TrackSource.MICROPHONE], grant);
   }
 
   // "Nommer présentateur" — partage d'écran uniquement, indépendant du droit de
@@ -354,6 +351,7 @@ export class RoomsService {
       startedAt: room.startedAt?.toISOString() ?? null,
       endedAt: room.endedAt?.toISOString() ?? null,
       canManage,
+      isMoodle: room.moodleMeetingId !== null,
     };
   }
 }

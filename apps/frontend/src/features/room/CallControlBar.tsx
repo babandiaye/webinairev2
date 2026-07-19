@@ -224,7 +224,7 @@ export function CallControlBar({
         buttonProps={camera.buttonProps}
         variant="mute"
         forceDisabled={!canUseCamera}
-        disabledTitle="Le modérateur doit vous autoriser à activer votre caméra"
+        disabledTitle="La caméra est désactivée pour les participants"
       />
 
       {/* Masqué (pas seulement désactivé) pour un participant sans droit de

@@ -30,6 +30,9 @@ export interface RoomDto {
   // co-modérateur inscrit) — pilote l'affichage des boutons de gestion
   // (Enregistrements/Présence/Étudiants/Supprimer) côté frontend.
   canManage: boolean;
+  // true si la salle a été créée depuis le plugin Moodle (mod_webinairev2) —
+  // purement informatif (badge), n'affecte plus les règles de visibilité.
+  isMoodle: boolean;
 }
 
 export interface CreateRoomDto {

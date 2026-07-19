@@ -74,6 +74,19 @@ export class EnrollmentsService {
     await this.prisma.enrollment.deleteMany({ where: { roomId, userId } });
   }
 
+  // Variante idempotente d'enroll(), utilisée par la synchronisation Moodle
+  // (MoodleService.syncUser) — appelée à chaque affichage de l'activité côté
+  // plugin, ne doit jamais échouer si l'inscription existe déjà (contrairement
+  // à enroll(), qui lève délibérément un 409 pour l'action interactive
+  // "Inscrire" de la page Étudiants).
+  async ensureEnrolled(roomId: string, userId: string, createdBy: string): Promise<void> {
+    await this.prisma.enrollment.upsert({
+      where: { roomId_userId: { roomId, userId } },
+      update: {},
+      create: { roomId, userId, createdBy },
+    });
+  }
+
   // Utilisé par RoomsService.list() pour calculer canManage/visibilité sans
   // N+1 — un seul findMany pour toutes les salles retournées.
   async enrolledRoomIds(userId: string): Promise<Set<string>> {

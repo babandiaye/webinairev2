@@ -108,11 +108,9 @@ model Room {
 // inscrit sur le cours d'un autre modérateur devient co-modérateur, avec les
 // mêmes privilèges que le créateur (voir EnrollmentsService.canManageRoom,
 // seul point de vérité pour cette règle, réutilisé par RoomAccessGuard).
-// Les salles liées à Moodle (moodleMeetingId non nul) sont exemptées de cette
-// restriction pour ne pas casser l'intégration existante (le plugin Moodle
-// n'appelle actuellement aucun endpoint d'inscription) — ce modèle reste
-// néanmoins prêt à accueillir une synchronisation Moodle future sans migration
-// supplémentaire.
+// S'applique aussi aux salles liées à Moodle : MoodleService.syncUser inscrit
+// automatiquement l'étudiant/enseignant Moodle (createdBy="moodle-sync") à
+// chaque affichage de l'activité côté plugin, avant qu'il n'atteigne webinairev2.
 model Enrollment {
   id        String   @id @default(cuid())
   roomId    String

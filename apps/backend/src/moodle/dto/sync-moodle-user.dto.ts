@@ -1,4 +1,4 @@
-import { IsBoolean, IsEmail, IsString, MinLength } from "class-validator";
+import { IsBoolean, IsEmail, IsOptional, IsString, MinLength } from "class-validator";
 
 export class SyncMoodleUserDto {
   @IsEmail()
@@ -12,4 +12,12 @@ export class SyncMoodleUserDto {
   // différent d'étudiant (Enseignant, Enseignant non éditeur, Gestionnaire...) => true.
   @IsBoolean()
   isTeacher!: boolean;
+
+  // Room.id (mod_webinairev2.roomid côté plugin) — quand fourni, inscrit aussi
+  // cet utilisateur au cours (voir MoodleService.syncUser / EnrollmentsService.
+  // ensureEnrolled). Optionnel : un compte peut être synchronisé avant que
+  // l'activité n'ait encore de salle associée.
+  @IsOptional()
+  @IsString()
+  roomId?: string;
 }

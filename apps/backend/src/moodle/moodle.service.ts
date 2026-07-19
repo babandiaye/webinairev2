@@ -6,6 +6,7 @@ import { PrismaService } from "../prisma/prisma.service";
 import { LiveKitClientsService } from "../livekit/livekit-clients.service";
 import { RecordingsService } from "../recordings/recordings.service";
 import { UsersService } from "../users/users.service";
+import { EnrollmentsService } from "../enrollments/enrollments.service";
 import { signDownloadToken } from "../common/download-token.util";
 import {
   MoodleRecordingDto,
@@ -29,6 +30,7 @@ export class MoodleService {
     private readonly livekitClients: LiveKitClientsService,
     private readonly recordings: RecordingsService,
     private readonly users: UsersService,
+    private readonly enrollments: EnrollmentsService,
     private readonly config: ConfigService
   ) {}
 
@@ -111,16 +113,30 @@ export class MoodleService {
     await this.recordings.remove(roomId, recordingId);
   }
 
-  // Appelé par le plugin Moodle à chaque jonction de salle pour signaler le rôle
-  // d'inscription au cours (Enseignant, Enseignant non éditeur, Gestionnaire...) —
-  // le plugin décide seul de isTeacher, ce backend applique juste la règle
-  // "promotion jamais rétrogradation" (voir UsersService.ensureAtLeastModerator).
-  // isTeacher=false ne modifie jamais un rôle existant : un MODERATOR/ADMIN par
-  // ailleurs inscrit comme simple étudiant sur ce cours ne doit pas être rétrogradé.
+  // Appelé par le plugin Moodle à chaque affichage de l'activité (view.php) pour
+  // signaler le rôle d'inscription au cours (Enseignant, Enseignant non
+  // éditeur, Gestionnaire...) — le plugin décide seul de isTeacher, ce backend
+  // applique juste la règle "promotion jamais rétrogradation" (voir
+  // UsersService.ensureAtLeastModerator). isTeacher=false ne modifie jamais un
+  // rôle existant : un MODERATOR/ADMIN par ailleurs inscrit comme simple
+  // étudiant sur ce cours ne doit pas être rétrogradé.
+  //
+  // Inscrit aussi l'utilisateur au cours (Enrollment) quand roomId est fourni —
+  // condition d'accès à la salle depuis que les salles Moodle ne sont plus
+  // exemptées de la restriction "enrôlés uniquement" (voir RoomsService.list/
+  // join). Un enseignant synchronisé ici devient ainsi co-modérateur de la
+  // salle (voir EnrollmentsService.canManageRoom), même s'il n'en est pas le
+  // créateur (cas d'un enseignant non éditeur ou d'un second enseignant).
   async syncUser(dto: SyncMoodleUserDto): Promise<MoodleUserSyncDto> {
     const user = dto.isTeacher
       ? await this.users.ensureAtLeastModerator(dto.email, dto.name)
       : await this.users.createOrGetPendingByEmail(dto.email, dto.name, Role.VIEWER);
+
+    if (dto.roomId) {
+      const room = await this.prisma.room.findUnique({ where: { id: dto.roomId } });
+      if (room) await this.enrollments.ensureEnrolled(room.id, user.id, "moodle-sync");
+    }
+
     return { userId: user.id, role: user.role };
   }
 }

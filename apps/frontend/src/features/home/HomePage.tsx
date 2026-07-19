@@ -1,6 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { CalendarPlus, Radio, CheckCircle2, DoorOpen, Users, Video, ClipboardList, Trash2, UserCog } from "lucide-react";
+import {
+  CalendarPlus,
+  Radio,
+  CheckCircle2,
+  DoorOpen,
+  Users,
+  Video,
+  ClipboardList,
+  Trash2,
+  UserCog,
+  GraduationCap,
+} from "lucide-react";
 import { ActivityStatsDto, RoomDto, StatsRange } from "@webinairev2/shared-types";
 import { useAuth } from "../../auth/AuthProvider";
 import { api } from "../../api/client";
@@ -169,7 +180,15 @@ export function HomePage() {
                       <div className="meeting-date-month">{MONTHS[date.getMonth()]}</div>
                     </div>
                     <div className="meeting-info">
-                      <p className="meeting-title">{room.title}</p>
+                      <p className="meeting-title">
+                        {room.title}
+                        {room.isMoodle && (
+                          <span className="badge-moodle" title="Créé depuis Moodle">
+                            <GraduationCap size={12} />
+                            Moodle
+                          </span>
+                        )}
+                      </p>
                       <span className="meeting-sub">Salle : {room.roomName}</span>
                     </div>
                     <div className="meeting-actions">

@@ -220,6 +220,7 @@ export class BreakoutRoomsService {
       startedAt: room.startedAt?.toISOString() ?? null,
       endedAt: room.endedAt?.toISOString() ?? null,
       canManage,
+      isMoodle: room.moodleMeetingId !== null,
     };
   }
 }

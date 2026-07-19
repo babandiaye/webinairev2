@@ -1720,6 +1720,21 @@ button.stat-card:hover {
   background: var(--color-role-viewer-bg);
   color: var(--color-role-viewer-text);
 }
+.badge-moodle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 8px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--color-warning-bg);
+  color: var(--color-warning);
+  vertical-align: middle;
+}
 .role-select {
   appearance: none;
   border: 1px solid var(--color-border);
