@@ -166,26 +166,24 @@ export function StatusPage() {
       )}
 
       {status && (
-        <>
-          <div className="status-grid" style={{ marginTop: 20 }}>
-            <HostGauge
-              label="CPU (hôte)"
-              percent={(status.host.cpuLoad1m / status.host.cpuCount) * 100}
-              detail={`charge ${status.host.cpuLoad1m.toFixed(2)} / ${status.host.cpuCount} cœurs`}
-            />
-            <HostGauge
-              label="RAM (hôte)"
-              percent={(status.host.memUsedBytes / status.host.memTotalBytes) * 100}
-              detail={`${formatBytes(status.host.memUsedBytes)} / ${formatBytes(status.host.memTotalBytes)}`}
-            />
-          </div>
-
-          <div className="status-grid" style={{ marginTop: 12 }}>
-            {status.components.map((c) => (
-              <ComponentCard component={c} key={c.id} />
-            ))}
-          </div>
-        </>
+        // Une seule grille pour l'hôte et les composants (plutôt que deux grilles
+        // empilées) : avec auto-fit, les cartes se répartissent naturellement sur
+        // toute la largeur disponible sans laisser de ligne isolée à la fin.
+        <div className="status-grid" style={{ marginTop: 20 }}>
+          <HostGauge
+            label="CPU (hôte)"
+            percent={(status.host.cpuLoad1m / status.host.cpuCount) * 100}
+            detail={`charge ${status.host.cpuLoad1m.toFixed(2)} / ${status.host.cpuCount} cœurs`}
+          />
+          <HostGauge
+            label="RAM (hôte)"
+            percent={(status.host.memUsedBytes / status.host.memTotalBytes) * 100}
+            detail={`${formatBytes(status.host.memUsedBytes)} / ${formatBytes(status.host.memTotalBytes)}`}
+          />
+          {status.components.map((c) => (
+            <ComponentCard component={c} key={c.id} />
+          ))}
+        </div>
       )}
     </DashboardLayout>
   );

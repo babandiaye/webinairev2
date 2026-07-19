@@ -2300,7 +2300,10 @@ button.stat-card:hover {
 
 .status-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  /* auto-fit (pas auto-fill) : les colonnes vides s'effondrent au lieu de
+     rester réservées, sinon les cartes restent étroites avec un grand vide à
+     droite dès que leur nombre ne remplit pas exactement la grille. */
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 14px;
 }
 
