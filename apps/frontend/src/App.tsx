@@ -6,6 +6,7 @@ import { RoomPage } from "./features/room/RoomPage";
 import { RecordingsPage } from "./features/recordings/RecordingsPage";
 import { AllRecordingsPage } from "./features/recordings/AllRecordingsPage";
 import { AttendancePage } from "./features/attendance/AttendancePage";
+import { EnrollmentsPage } from "./features/enrollments/EnrollmentsPage";
 import { AdminUsersPage } from "./features/admin/AdminUsersPage";
 import { StatusPage } from "./features/admin/StatusPage";
 import { EgressRoomView } from "./features/egress/EgressRoomView";
@@ -69,6 +70,14 @@ export function App() {
         element={
           <ProtectedRoute>
             <AttendancePage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/rooms/:id/enrollments"
+        element={
+          <ProtectedRoute>
+            <EnrollmentsPage />
           </ProtectedRoute>
         }
       />

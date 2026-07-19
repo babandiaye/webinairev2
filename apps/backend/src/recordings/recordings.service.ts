@@ -1,7 +1,7 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { EncodedFileOutput, EncodedFileType, EncodingOptionsPreset } from "livekit-server-sdk";
-import { RecordingStatus, Role, RoomStatus } from "@prisma/client";
+import { RecordingStatus, RoomStatus } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
 import { LiveKitClientsService } from "../livekit/livekit-clients.service";
 import { S3Service } from "../storage/s3.service";
@@ -10,6 +10,7 @@ import { DownloadLinkDto, RecordingDto, RecordingWithRoomDto } from "@webinairev
 import { signDownloadToken } from "../common/download-token.util";
 import { RECORDING_IN_PROGRESS_STATUSES } from "./recording-status.constants";
 import { EgressReconciliationService } from "./egress-reconciliation.service";
+import { EnrollmentsService } from "../enrollments/enrollments.service";
 
 const DOWNLOAD_LINK_TTL_SECONDS = 5 * 60;
 // Doit couvrir la durée max réaliste d'une session (le token reste valide tout
@@ -40,7 +41,8 @@ export class RecordingsService {
     private readonly livekitClients: LiveKitClientsService,
     private readonly s3: S3Service,
     private readonly config: ConfigService,
-    private readonly reconciliation: EgressReconciliationService
+    private readonly reconciliation: EgressReconciliationService,
+    private readonly enrollments: EnrollmentsService
   ) {}
 
   async start(roomId: string): Promise<RecordingDto> {
@@ -191,7 +193,7 @@ export class RecordingsService {
     if (recording.status !== RecordingStatus.READY) {
       throw new BadRequestException("Cet enregistrement n'est pas encore disponible");
     }
-    if (user.role !== Role.ADMIN && recording.room.creatorId !== user.id) {
+    if (!(await this.enrollments.canManageRoom(recording.room, user))) {
       throw new ForbiddenException("Vous n'êtes pas autorisé à télécharger cet enregistrement");
     }
 

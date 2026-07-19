@@ -19,6 +19,7 @@ import { MoodleModule } from "./moodle/moodle.module";
 import { AttendanceModule } from "./attendance/attendance.module";
 import { StatusModule } from "./status/status.module";
 import { StatsModule } from "./stats/stats.module";
+import { EnrollmentsModule } from "./enrollments/enrollments.module";
 
 @Module({
   imports: [
@@ -27,6 +28,7 @@ import { StatsModule } from "./stats/stats.module";
     PrismaModule,
     AuthModule,
     UsersModule,
+    EnrollmentsModule,
     RoomsModule,
     BreakoutRoomsModule,
     WhiteboardModule,

@@ -26,6 +26,10 @@ export interface RoomDto {
   creatorId: string;
   startedAt: string | null;
   endedAt: string | null;
+  // Calculé côté serveur pour l'utilisateur courant (créateur, admin, ou
+  // co-modérateur inscrit) — pilote l'affichage des boutons de gestion
+  // (Enregistrements/Présence/Étudiants/Supprimer) côté frontend.
+  canManage: boolean;
 }
 
 export interface CreateRoomDto {
@@ -275,4 +279,29 @@ export interface ActivityStatsDto {
   rooms: ActivityPointDto[]; // cours (salles MAIN) créés par jour
   sessions: ActivityPointDto[]; // sessions distinctes par jour
   recordingDurationSeconds: ActivityPointDto[]; // secondes enregistrées par jour
+}
+
+// --- Inscription aux cours (rôles Modérateur/Participant) ---
+
+export interface EnrollmentDto {
+  id: string;
+  userId: string;
+  name: string;
+  email: string;
+  role: Role;
+  createdAt: string;
+}
+
+export interface EnrollUserDto {
+  userId: string;
+}
+
+// Résultat de recherche pour l'inscription (GET /users/enrollable) — un
+// sous-ensemble minimal d'AdminUserDto, accessible aux modérateurs (pas
+// seulement aux admins).
+export interface EnrollableUserDto {
+  id: string;
+  name: string;
+  email: string;
+  role: Role;
 }

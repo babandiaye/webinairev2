@@ -57,6 +57,7 @@ model User {
   // salles créées (contrainte FK sur Room.creatorId).
   active       Boolean  @default(true)
   createdRooms Room[]
+  enrollments  Enrollment[]
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -94,11 +95,37 @@ model Room {
   presentations         Presentation[]
   whiteboardSnapshot    WhiteboardSnapshot?
   attendanceRecords     AttendanceRecord[]
+  enrollments           Enrollment[]
   createdAt             DateTime   @default(now())
   updatedAt             DateTime   @updatedAt
 
   @@index([parentRoomId])
   @@map("rooms")
+}
+
+// Inscription d'un utilisateur à un cours (Room de type MAIN). Un VIEWER inscrit
+// ne voit/rejoint que ce cours (voir RoomsService.list/join) ; un MODERATOR
+// inscrit sur le cours d'un autre modérateur devient co-modérateur, avec les
+// mêmes privilèges que le créateur (voir EnrollmentsService.canManageRoom,
+// seul point de vérité pour cette règle, réutilisé par RoomAccessGuard).
+// Les salles liées à Moodle (moodleMeetingId non nul) sont exemptées de cette
+// restriction pour ne pas casser l'intégration existante (le plugin Moodle
+// n'appelle actuellement aucun endpoint d'inscription) — ce modèle reste
+// néanmoins prêt à accueillir une synchronisation Moodle future sans migration
+// supplémentaire.
+model Enrollment {
+  id        String   @id @default(cuid())
+  roomId    String
+  room      Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdBy String
+  createdAt DateTime @default(now())
+
+  @@unique([roomId, userId])
+  @@index([roomId])
+  @@index([userId])
+  @@map("enrollments")
 }
 
 model Recording {

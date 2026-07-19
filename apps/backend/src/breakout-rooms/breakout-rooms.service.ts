@@ -1,10 +1,11 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import { Role, Room, RoomStatus, RoomType } from "@prisma/client";
+import { Room, RoomStatus, RoomType } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
 import { LiveKitClientsService } from "../livekit/livekit-clients.service";
 import { LiveKitTokenService } from "../livekit/livekit-token.service";
 import { SessionUser } from "../auth/session.types";
+import { EnrollmentsService } from "../enrollments/enrollments.service";
 import {
   BreakoutRoomDto,
   JoinRoomResponseDto,
@@ -19,7 +20,8 @@ export class BreakoutRoomsService {
     private readonly prisma: PrismaService,
     private readonly livekitClients: LiveKitClientsService,
     private readonly livekitToken: LiveKitTokenService,
-    private readonly config: ConfigService
+    private readonly config: ConfigService,
+    private readonly enrollments: EnrollmentsService
   ) {}
 
   private async findParentOrThrow(parentId: string): Promise<Room> {
@@ -122,7 +124,7 @@ export class BreakoutRoomsService {
 
     const parent = await this.prisma.room.findUnique({ where: { id: parentId } });
     const isAssigned = breakout.assignedUserIds.includes(user.id);
-    const isManager = user.role === Role.ADMIN || parent?.creatorId === user.id;
+    const isManager = parent !== null && (await this.enrollments.canManageRoom(parent, user));
 
     // Cœur de la garantie de cloisonnement des breakouts (vérifiée par le jalon 3 du
     // plan) : un participant ne peut rejoindre que le groupe auquel il est affecté,
@@ -140,7 +142,7 @@ export class BreakoutRoomsService {
     });
 
     return {
-      room: this.toRoomDto(breakout),
+      room: this.toRoomDto(breakout, isManager),
       livekitUrl: this.config.get<string>("livekit.wsUrlPublic")!,
       token,
     };
@@ -206,7 +208,7 @@ export class BreakoutRoomsService {
     };
   }
 
-  private toRoomDto(room: Room): RoomDto {
+  private toRoomDto(room: Room, canManage: boolean): RoomDto {
     return {
       id: room.id,
       roomName: room.roomName,
@@ -217,6 +219,7 @@ export class BreakoutRoomsService {
       creatorId: room.creatorId,
       startedAt: room.startedAt?.toISOString() ?? null,
       endedAt: room.endedAt?.toISOString() ?? null,
+      canManage,
     };
   }
 }

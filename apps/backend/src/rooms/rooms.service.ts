@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
 import { Role, Room, RoomStatus, RoomType } from "@prisma/client";
 import { TrackSource, TrackType } from "livekit-server-sdk";
 import { randomUUID } from "crypto";
@@ -11,6 +11,7 @@ import { SessionUser } from "../auth/session.types";
 import { BreakoutRoomsService } from "../breakout-rooms/breakout-rooms.service";
 import { PresentationsService } from "../presentations/presentations.service";
 import { S3Service } from "../storage/s3.service";
+import { EnrollmentsService } from "../enrollments/enrollments.service";
 
 @Injectable()
 export class RoomsService {
@@ -21,7 +22,8 @@ export class RoomsService {
     private readonly config: ConfigService,
     private readonly breakoutRooms: BreakoutRoomsService,
     private readonly presentations: PresentationsService,
-    private readonly s3: S3Service
+    private readonly s3: S3Service,
+    private readonly enrollments: EnrollmentsService
   ) {}
 
   async create(title: string, creator: SessionUser): Promise<RoomDto> {
@@ -36,15 +38,49 @@ export class RoomsService {
       data: { roomName, title, creatorId: creator.id },
     });
 
-    return this.toDto(room);
+    // Le créateur peut toujours gérer sa propre salle, inutile d'interroger les
+    // inscriptions ici.
+    return this.toDto(room, true);
   }
 
-  async list(): Promise<RoomDto[]> {
+  // Visibilité par rôle : ADMIN voit tout, les autres voient leurs propres
+  // salles + celles où ils sont inscrits (étudiant ou co-modérateur) — sauf les
+  // salles liées à Moodle (moodleMeetingId non nul), exemptées de cette
+  // restriction pour ne pas casser l'intégration Moodle existante (voir
+  // EnrollmentsService et le commentaire du modèle Enrollment).
+  async list(user: SessionUser): Promise<RoomDto[]> {
+    const where =
+      user.role === Role.ADMIN
+        ? { type: RoomType.MAIN }
+        : {
+            type: RoomType.MAIN,
+            OR: [
+              { moodleMeetingId: { not: null } },
+              { creatorId: user.id },
+              { enrollments: { some: { userId: user.id } } },
+            ],
+          };
+
     const rooms = await this.prisma.room.findMany({
-      where: { type: "MAIN" },
+      where,
       orderBy: { createdAt: "desc" },
     });
-    return rooms.map((r) => this.toDto(r));
+
+    const enrolledRoomIds =
+      user.role === Role.MODERATOR ? await this.enrollments.enrolledRoomIds(user.id) : null;
+
+    return rooms.map((r) => {
+      const canManage =
+        user.role === Role.ADMIN ||
+        r.creatorId === user.id ||
+        (enrolledRoomIds !== null && enrolledRoomIds.has(r.id));
+      return this.toDto(r, canManage);
+    });
+  }
+
+  async findOne(id: string, user: SessionUser): Promise<RoomDto> {
+    const room = await this.findOneOrThrow(id);
+    return this.toDto(room, await this.enrollments.canManageRoom(room, user));
   }
 
   async findOneOrThrow(id: string): Promise<Room> {
@@ -57,16 +93,11 @@ export class RoomsService {
     const room = await this.findOneOrThrow(id);
     // Un créateur de salle (ex. enseignant Moodle jamais promu manuellement, voir
     // MoodleService.upsertTeacherByEmail) a les droits de modération sur SA salle
-    // même si son rôle global reste VIEWER — canManage côté frontend et
-    // RoomAccessGuard appliquent déjà la même règle (ADMIN ou créateur), on
-    // l'aligne ici pour les droits LiveKit réels. Un MODERATOR global qui n'est
-    // PAS le créateur ne doit PAS recevoir isModerator/roomAdmin ici : ce grant
-    // LiveKit est protocolaire (mute/kick directs via le SDK client, hors de
-    // notre API) et échapperait sinon à RoomAccessGuard, qui lui refuse déjà
-    // ces mêmes actions à un modérateur non-créateur — un rôle global MODERATOR
-    // ne donne des droits que sur les salles qu'il crée lui-même (voir aussi
-    // breakout-rooms.service.ts, qui applique déjà cette règle stricte).
-    const isModerator = user.role === Role.ADMIN || room.creatorId === user.id;
+    // même si son rôle global reste VIEWER — canManageRoom (EnrollmentsService)
+    // applique la même règle que RoomAccessGuard : ADMIN, créateur, ou
+    // co-modérateur inscrit (un MODERATOR inscrit sur le cours d'un autre
+    // modérateur obtient ici aussi les mêmes droits LiveKit que le créateur).
+    const isModerator = await this.enrollments.canManageRoom(room, user);
 
     if (isModerator) {
       // Un modérateur peut toujours (re)rejoindre, y compris une salle SCHEDULED/
@@ -83,13 +114,22 @@ export class RoomsService {
           data: { status: RoomStatus.SCHEDULED, endedAt: null, whiteboardOpen: false },
         });
       }
-    } else if (!(await this.hasActiveModerator(room.roomName))) {
-      // Un participant ne peut rejoindre que si un modérateur/admin est déjà
-      // connecté à la salle (présence vérifiée en direct auprès de LiveKit, pas
-      // via le statut en base qui ne reflète que l'historique webhook).
-      throw new BadRequestException(
-        "La réunion n'a pas encore commencé, en attente d'un modérateur"
-      );
+    } else {
+      // Une salle liée à Moodle reste ouverte à tout utilisateur connecté (le
+      // plugin mod_webinairev2 actuel ne notifie jamais webinairev2 de qui est
+      // inscrit à quel cours Moodle, voir EnrollmentsModule) — seules les salles
+      // créées manuellement exigent une inscription explicite.
+      if (room.moodleMeetingId === null && !(await this.enrollments.isEnrolled(room.id, user.id))) {
+        throw new ForbiddenException("Vous n'êtes pas inscrit à ce cours");
+      }
+      if (!(await this.hasActiveModerator(room.roomName))) {
+        // Un participant ne peut rejoindre que si un modérateur/admin est déjà
+        // connecté à la salle (présence vérifiée en direct auprès de LiveKit, pas
+        // via le statut en base qui ne reflète que l'historique webhook).
+        throw new BadRequestException(
+          "La réunion n'a pas encore commencé, en attente d'un modérateur"
+        );
+      }
     }
 
     const token = await this.livekitToken.createRoomToken({
@@ -101,7 +141,7 @@ export class RoomsService {
     });
 
     return {
-      room: this.toDto(room),
+      room: this.toDto(room, isModerator),
       livekitUrl: this.config.get<string>("livekit.wsUrlPublic")!,
       token,
     };
@@ -156,7 +196,9 @@ export class RoomsService {
       data: { status: RoomStatus.ENDED, endedAt: new Date(), currentPresentationId: null },
     });
 
-    return this.toDto(updated);
+    // Route déjà gardée par RoomAccessGuard : seul un gestionnaire de la salle
+    // (créateur, co-modérateur inscrit, ou admin) atteint ce point.
+    return this.toDto(updated, true);
   }
 
   // Suppression définitive (close() ne fait que clôturer une session, la salle
@@ -300,7 +342,7 @@ export class RoomsService {
     }
   }
 
-  private toDto(room: Room): RoomDto {
+  private toDto(room: Room, canManage: boolean): RoomDto {
     return {
       id: room.id,
       roomName: room.roomName,
@@ -311,6 +353,7 @@ export class RoomsService {
       creatorId: room.creatorId,
       startedAt: room.startedAt?.toISOString() ?? null,
       endedAt: room.endedAt?.toISOString() ?? null,
+      canManage,
     };
   }
 }

@@ -178,10 +178,16 @@ export function HomePage() {
                         <Video size={15} />
                         Enregistrements
                       </button>
-                      {(user.role === "ADMIN" || user.id === room.creatorId) && (
+                      {room.canManage && (
                         <button className="btn btn-ghost" onClick={() => navigate(`/rooms/${room.id}/attendance`)}>
                           <ClipboardList size={15} />
                           Présence
+                        </button>
+                      )}
+                      {room.canManage && (
+                        <button className="btn btn-ghost" onClick={() => navigate(`/rooms/${room.id}/enrollments`)}>
+                          <Users size={15} />
+                          Étudiants
                         </button>
                       )}
                       {(room.status !== "ENDED" || canCreateRoom) && (
@@ -189,7 +195,7 @@ export function HomePage() {
                           {room.status === "ENDED" ? "Redémarrer" : "Rejoindre"}
                         </button>
                       )}
-                      {(user.role === "ADMIN" || user.id === room.creatorId) && room.status !== "LIVE" && (
+                      {room.canManage && room.status !== "LIVE" && (
                         <button
                           className="btn btn-ghost"
                           title="Supprimer définitivement"

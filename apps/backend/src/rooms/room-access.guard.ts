@@ -7,8 +7,8 @@ import {
   SetMetadata,
 } from "@nestjs/common";
 import { Reflector } from "@nestjs/core";
-import { Role } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
+import { EnrollmentsService } from "../enrollments/enrollments.service";
 
 export const ROOM_ACCESS_KEY = "requireRoomAccess";
 
@@ -22,7 +22,8 @@ export const RequireRoomAccess = () => SetMetadata(ROOM_ACCESS_KEY, true);
 export class RoomAccessGuard implements CanActivate {
   constructor(
     private readonly reflector: Reflector,
-    private readonly prisma: PrismaService
+    private readonly prisma: PrismaService,
+    private readonly enrollments: EnrollmentsService
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -39,9 +40,9 @@ export class RoomAccessGuard implements CanActivate {
     const room = await this.prisma.room.findUnique({ where: { id: roomId } });
     if (!room) throw new NotFoundException("Salle introuvable");
 
-    if (user.role !== Role.ADMIN && room.creatorId !== user.id) {
+    if (!(await this.enrollments.canManageRoom(room, user))) {
       throw new ForbiddenException(
-        "Seul le créateur de la salle ou un administrateur peut effectuer cette action"
+        "Seul le créateur de la salle, un co-modérateur inscrit, ou un administrateur peut effectuer cette action"
       );
     }
 

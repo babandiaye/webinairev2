@@ -3,7 +3,7 @@ import { randomUUID } from "crypto";
 import { Role } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
 import { SessionStoreService } from "../auth/session-store.service";
-import { AdminUserDto, CreateUserDto, CsvImportSummaryDto } from "@webinairev2/shared-types";
+import { AdminUserDto, CreateUserDto, CsvImportSummaryDto, EnrollableUserDto } from "@webinairev2/shared-types";
 
 type UserRow = {
   id: string;
@@ -18,6 +18,7 @@ type UserRow = {
 const CSV_EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const CSV_IMPORT_BATCH_SIZE = 500;
 const CSV_VALID_ROLES: Role[] = ["ADMIN", "MODERATOR", "VIEWER"];
+const ENROLLABLE_SEARCH_LIMIT = 20;
 
 interface CsvRow {
   email: string;
@@ -38,6 +39,25 @@ export class UsersService {
       include: { _count: { select: { createdRooms: true } } },
     });
     return users.map((u) => this.toDto(u));
+  }
+
+  // Utilisé par la page d'inscription d'un cours (accessible aux modérateurs,
+  // pas seulement aux admins, contrairement à list()) — jamais la liste
+  // complète des comptes, seulement une recherche bornée par nom/email.
+  async searchEnrollable(query: string): Promise<EnrollableUserDto[]> {
+    const q = query.trim();
+    if (q.length === 0) return [];
+
+    const users = await this.prisma.user.findMany({
+      where: {
+        active: true,
+        OR: [{ name: { contains: q, mode: "insensitive" } }, { email: { contains: q, mode: "insensitive" } }],
+      },
+      orderBy: { name: "asc" },
+      take: ENROLLABLE_SEARCH_LIMIT,
+      select: { id: true, name: true, email: true, role: true },
+    });
+    return users;
   }
 
   async updateRole(targetId: string, role: Role, requesterId: string): Promise<AdminUserDto> {

@@ -8,6 +8,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   Res,
   UploadedFile,
   UseGuards,
@@ -21,7 +22,7 @@ import { RolesGuard } from "../auth/roles.guard";
 import { RequireRole } from "../auth/roles.decorator";
 import { CurrentUser } from "../auth/current-user.decorator";
 import { SessionUser } from "../auth/session.types";
-import { AdminUserDto, CsvImportSummaryDto, UserDto } from "@webinairev2/shared-types";
+import { AdminUserDto, CsvImportSummaryDto, EnrollableUserDto, UserDto } from "@webinairev2/shared-types";
 import { UsersService } from "./users.service";
 import { UpdateRoleDto } from "./dto/update-role.dto";
 import { SetActiveDto } from "./dto/set-active.dto";
@@ -43,6 +44,14 @@ export class UsersController {
   @RequireRole(Role.ADMIN)
   list(): Promise<AdminUserDto[]> {
     return this.usersService.list();
+  }
+
+  // Recherche pour l'inscription à un cours — accessible aux modérateurs
+  // (contrairement à list(), réservé ADMIN), résultats bornés et minimaux.
+  @Get("enrollable")
+  @RequireRole(Role.ADMIN, Role.MODERATOR)
+  searchEnrollable(@Query("q") q: string | undefined): Promise<EnrollableUserDto[]> {
+    return this.usersService.searchEnrollable(q ?? "");
   }
 
   @Post()

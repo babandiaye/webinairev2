@@ -10,6 +10,9 @@ import type {
   CreateUserDto,
   CsvImportSummaryDto,
   DownloadLinkDto,
+  EnrollableUserDto,
+  EnrollmentDto,
+  EnrollUserDto,
   JoinRoomResponseDto,
   MyBreakoutAssignmentDto,
   ParticipantDto,
@@ -54,6 +57,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 export const api = {
   me: () => request<UserDto>("/users/me"),
   listRooms: () => request<RoomDto[]>("/rooms"),
+  getRoom: (roomId: string) => request<RoomDto>(`/rooms/${roomId}`),
   createRoom: (dto: CreateRoomDto) =>
     request<RoomDto>("/rooms", { method: "POST", body: JSON.stringify(dto) }),
   joinRoom: (roomId: string) => request<JoinRoomResponseDto>(`/rooms/${roomId}/join`, { method: "POST" }),
@@ -91,6 +95,14 @@ export const api = {
   listAttendance: (roomId: string) => request<AttendanceSessionGroupDto[]>(`/rooms/${roomId}/attendance`),
   deleteAttendanceSession: (roomId: string, startedAtMs: number) =>
     request<void>(`/rooms/${roomId}/attendance/sessions/${startedAtMs}`, { method: "DELETE" }),
+
+  listEnrollments: (roomId: string) => request<EnrollmentDto[]>(`/rooms/${roomId}/enrollments`),
+  enrollUser: (roomId: string, dto: EnrollUserDto) =>
+    request<EnrollmentDto>(`/rooms/${roomId}/enrollments`, { method: "POST", body: JSON.stringify(dto) }),
+  unenrollUser: (roomId: string, userId: string) =>
+    request<void>(`/rooms/${roomId}/enrollments/${userId}`, { method: "DELETE" }),
+  searchEnrollableUsers: (q: string) =>
+    request<EnrollableUserDto[]>(`/users/enrollable?q=${encodeURIComponent(q)}`),
 
   listUsers: () => request<AdminUserDto[]>("/users"),
   createUser: (dto: CreateUserDto) =>

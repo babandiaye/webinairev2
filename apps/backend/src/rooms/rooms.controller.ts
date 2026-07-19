@@ -16,14 +16,19 @@ export class RoomsController {
   constructor(private readonly rooms: RoomsService) {}
 
   @Get()
-  list() {
-    return this.rooms.list();
+  list(@CurrentUser() user: SessionUser) {
+    return this.rooms.list(user);
   }
 
   @Post()
   @RequireRole(Role.ADMIN, Role.MODERATOR)
   create(@Body() dto: CreateRoomDto, @CurrentUser() user: SessionUser) {
     return this.rooms.create(dto.title, user);
+  }
+
+  @Get(":id")
+  findOne(@Param("id") id: string, @CurrentUser() user: SessionUser) {
+    return this.rooms.findOne(id, user);
   }
 
   @Post(":id/join")

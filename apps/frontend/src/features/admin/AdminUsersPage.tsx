@@ -6,14 +6,7 @@ import { api } from "../../api/client";
 import { useAuth } from "../../auth/AuthProvider";
 import { DashboardLayout } from "../../components/layout/DashboardLayout";
 import { initialsOf } from "../../lib/initials";
-
-const ROLE_LABELS: Record<Role, string> = {
-  ADMIN: "Administrateur",
-  MODERATOR: "Modérateur",
-  VIEWER: "Participant",
-};
-
-const ROLES: Role[] = ["ADMIN", "MODERATOR", "VIEWER"];
+import { ROLE_LABELS, ROLES } from "../../lib/roleLabels";
 
 export function AdminUsersPage() {
   const { user } = useAuth();
