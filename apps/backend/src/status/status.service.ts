@@ -109,7 +109,12 @@ export class StatusService {
         await this.redis.connect();
       }
       await this.redis.ping();
-      const info = await this.redis.info("clients", "memory");
+      // Un seul appel sans section (retourne tout) plutôt que info("clients",
+      // "memory") : les sections multiples ne sont supportées qu'à partir de
+      // Redis 7 — le conteneur réellement déployé ici tourne encore en 6.0.16
+      // malgré l'image "redis:7-alpine" du compose (jamais recréé depuis),
+      // et renvoie "ERR syntax error" sur la syntaxe multi-sections.
+      const info = await this.redis.info();
       const connectedClients = Number(/connected_clients:(\d+)/.exec(info)?.[1] ?? 0);
       const usedMemoryBytes = Number(/used_memory:(\d+)/.exec(info)?.[1] ?? 0);
       return {
