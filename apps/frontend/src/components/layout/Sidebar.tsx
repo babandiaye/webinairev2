@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { NAV_SECTIONS } from "./nav-sections";
 import { useTheme } from "../../theme/ThemeProvider";
 import type { Role } from "@webinairev2/shared-types";
+import logo from "../../assets/logo-webinairev2.png";
 
 export function Sidebar({
   role,
@@ -31,13 +32,7 @@ export function Sidebar({
       {open && <div className="sidebar-backdrop" onClick={onClose} />}
       <aside className={`sidebar ${open ? "open" : ""}`}>
         <div className="sidebar-header">
-          <div className="sidebar-logo">
-            <Video size={20} />
-          </div>
-          <div>
-            <div className="sidebar-title">Webinaire</div>
-            <div className="sidebar-subtitle">Plateforme de webinaires</div>
-          </div>
+          <img src={logo} alt="Webinaire — Plateforme de webinaires" className="sidebar-brand-logo" />
         </div>
 
         <nav className="sidebar-nav">
