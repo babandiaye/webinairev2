@@ -17,6 +17,7 @@ import { WebhooksModule } from "./webhooks/webhooks.module";
 import { HealthModule } from "./health/health.module";
 import { MoodleModule } from "./moodle/moodle.module";
 import { AttendanceModule } from "./attendance/attendance.module";
+import { StatusModule } from "./status/status.module";
 
 @Module({
   imports: [
@@ -36,6 +37,7 @@ import { AttendanceModule } from "./attendance/attendance.module";
     HealthModule,
     MoodleModule,
     AttendanceModule,
+    StatusModule,
   ],
 })
 export class AppModule {}

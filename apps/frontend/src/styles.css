@@ -13,6 +13,11 @@
   --color-danger: #dc2626;
   --color-danger-bg: #fee2e2;
 
+  --color-success: #16a34a;
+  --color-success-bg: #dcfce7;
+  --color-warning: #d97706;
+  --color-warning-bg: #fef3c7;
+
   --color-status-scheduled-bg: #eaf1ff;
   --color-status-scheduled-text: #2563eb;
   --color-status-live-bg: #fee2e2;
@@ -43,6 +48,12 @@
   --color-primary-soft: rgba(59, 130, 246, 0.16);
 
   --color-danger-bg: rgba(220, 38, 38, 0.16);
+
+  --color-success: #4ade80;
+  --color-success-bg: rgba(21, 128, 61, 0.2);
+  --color-warning: #fbbf24;
+  --color-warning-bg: rgba(217, 119, 6, 0.18);
+
   --color-status-scheduled-bg: rgba(59, 130, 246, 0.16);
   --color-status-live-bg: rgba(220, 38, 38, 0.18);
   --color-status-ended-bg: rgba(21, 128, 61, 0.2);
@@ -68,6 +79,10 @@
     --color-primary-hover: #2563eb;
     --color-primary-soft: rgba(59, 130, 246, 0.16);
     --color-danger-bg: rgba(220, 38, 38, 0.16);
+    --color-success: #4ade80;
+    --color-success-bg: rgba(21, 128, 61, 0.2);
+    --color-warning: #fbbf24;
+    --color-warning-bg: rgba(217, 119, 6, 0.18);
     --color-status-scheduled-bg: rgba(59, 130, 246, 0.16);
     --color-status-live-bg: rgba(220, 38, 38, 0.18);
     --color-status-ended-bg: rgba(21, 128, 61, 0.2);
@@ -2241,4 +2256,136 @@ button.stat-card:hover {
   font-size: 0.76rem;
   color: rgba(255, 255, 255, 0.4);
   text-align: center;
+}
+
+/* ---------- Statut système (/admin/status) ---------- */
+
+.status-dot-up {
+  color: var(--color-success);
+}
+.status-dot-degraded {
+  color: var(--color-warning);
+}
+.status-dot-down {
+  color: var(--color-danger);
+}
+
+.status-summary-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 18px;
+  border-radius: var(--radius);
+  font-weight: 600;
+  margin-top: 20px;
+}
+.status-summary-up {
+  background: var(--color-success-bg);
+  color: var(--color-success);
+}
+.status-summary-degraded {
+  background: var(--color-warning-bg);
+  color: var(--color-warning);
+}
+.status-summary-down {
+  background: var(--color-danger-bg);
+  color: var(--color-danger);
+}
+.status-summary-timestamp {
+  margin-left: auto;
+  font-weight: 400;
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+}
+
+.status-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 14px;
+}
+
+.status-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border-left-width: 3px;
+}
+.status-card-up {
+  border-left-color: var(--color-success);
+}
+.status-card-degraded {
+  border-left-color: var(--color-warning);
+}
+.status-card-down {
+  border-left-color: var(--color-danger);
+}
+.status-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.status-card-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+}
+.status-latency {
+  font-size: 0.76rem;
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.status-card-error {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--color-danger);
+}
+
+.status-metrics {
+  display: flex;
+  gap: 18px;
+}
+.status-metric {
+  display: flex;
+  flex-direction: column;
+}
+.status-metric-value {
+  font-size: 1.2rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.status-metric-label {
+  font-size: 0.72rem;
+  color: var(--color-text-muted);
+}
+
+.status-gauge-track {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--color-border);
+  overflow: hidden;
+}
+.status-gauge-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: currentColor;
+  transition: width 0.4s ease;
+}
+.status-gauge-up .status-gauge-fill {
+  color: var(--color-success);
+}
+.status-gauge-degraded .status-gauge-fill {
+  color: var(--color-warning);
+}
+.status-gauge-down .status-gauge-fill {
+  color: var(--color-danger);
+}
+
+.status-sparkline-wrap {
+  display: flex;
+}
+.status-sparkline {
+  width: 100%;
+  height: 32px;
 }

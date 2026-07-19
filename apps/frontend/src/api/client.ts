@@ -18,6 +18,7 @@ import type {
   RecordingWithRoomDto,
   RoomDto,
   SetCurrentSlideDto,
+  SystemStatusDto,
   UpdateRoleDto,
   UserDto,
   VotePollDto,
@@ -98,6 +99,8 @@ export const api = {
     request<AdminUserDto>(`/users/${userId}/active`, { method: "PATCH", body: JSON.stringify({ active }) }),
   deleteUser: (userId: string) => request<void>(`/users/${userId}`, { method: "DELETE" }),
   csvTemplateUrl: `${API_URL}/users/csv-template`,
+
+  getSystemStatus: () => request<SystemStatusDto>("/status"),
   async importUsersCsv(file: File): Promise<CsvImportSummaryDto> {
     const form = new FormData();
     form.append("file", file);

@@ -16,6 +16,7 @@ import { LiveKitClientsService } from "../livekit/livekit-clients.service";
 import { EgressReconciliationService } from "../recordings/egress-reconciliation.service";
 import { RECORDING_IN_PROGRESS_STATUSES } from "../recordings/recording-status.constants";
 import { AttendanceService } from "../attendance/attendance.service";
+import { WebhookHealthService } from "./webhook-health.service";
 
 @Controller("webhooks/livekit")
 export class LiveKitWebhookController {
@@ -27,6 +28,7 @@ export class LiveKitWebhookController {
     private readonly livekitClients: LiveKitClientsService,
     private readonly egressReconciliation: EgressReconciliationService,
     private readonly attendance: AttendanceService,
+    private readonly webhookHealth: WebhookHealthService,
     config: ConfigService
   ) {
     this.receiver = new WebhookReceiver(
@@ -49,6 +51,7 @@ export class LiveKitWebhookController {
     }
 
     const event = await this.receiver.receive(req.rawBody.toString("utf8"), authHeader);
+    this.webhookHealth.recordReceived();
     this.logger.log(`event: ${event.event}`);
 
     const roomName = event.room?.name;

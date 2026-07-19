@@ -3,6 +3,7 @@ import {
   CalendarPlus,
   Video,
   UserCog,
+  Activity,
   type LucideIcon,
 } from "lucide-react";
 
@@ -38,6 +39,9 @@ export const NAV_SECTIONS: NavSection[] = [
   {
     title: "Administration",
     adminOnly: true,
-    items: [{ label: "Utilisateurs et rôles", icon: UserCog, to: "/admin/users" }],
+    items: [
+      { label: "Utilisateurs et rôles", icon: UserCog, to: "/admin/users" },
+      { label: "Statut système", icon: Activity, to: "/admin/status" },
+    ],
   },
 ];

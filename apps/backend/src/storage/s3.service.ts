@@ -3,6 +3,7 @@ import { ConfigService } from "@nestjs/config";
 import {
   DeleteObjectCommand,
   GetObjectCommand,
+  HeadBucketCommand,
   HeadObjectCommand,
   PutObjectCommand,
   S3Client,
@@ -38,6 +39,13 @@ export class S3Service {
       bucket: this.bucket,
       forcePathStyle: true,
     });
+  }
+
+  // Simple vérification de joignabilité pour la page de statut (/admin/status) —
+  // pas de chiffres d'espace disque (nécessiteraient l'API admin MinIO, hors
+  // scope de ce client S3 standard).
+  async checkReachable(): Promise<void> {
+    await this.client.send(new HeadBucketCommand({ Bucket: this.bucket }));
   }
 
   async headObject(key: string) {

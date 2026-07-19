@@ -6,6 +6,7 @@ import { RecordingsPage } from "./features/recordings/RecordingsPage";
 import { AllRecordingsPage } from "./features/recordings/AllRecordingsPage";
 import { AttendancePage } from "./features/attendance/AttendancePage";
 import { AdminUsersPage } from "./features/admin/AdminUsersPage";
+import { StatusPage } from "./features/admin/StatusPage";
 import { EgressRoomView } from "./features/egress/EgressRoomView";
 
 function ProtectedRoute({ children }: { children: JSX.Element }) {
@@ -67,6 +68,14 @@ export function App() {
         element={
           <ProtectedRoute>
             <AdminUsersPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/status"
+        element={
+          <ProtectedRoute>
+            <StatusPage />
           </ProtectedRoute>
         }
       />

@@ -241,3 +241,22 @@ export interface AttendanceSessionGroupDto {
   endedAt: string | null; // null tant qu'au moins un participant est encore connecté
   participants: AttendanceDto[];
 }
+
+// --- Statut système (page /admin/status) ---
+
+export type ComponentHealth = "up" | "degraded" | "down";
+
+export interface StatusComponentDto {
+  id: string; // "livekit" | "egress" | "ingress" | "postgresql" | "redis" | "minio" | "webhook"
+  label: string;
+  status: ComponentHealth;
+  latencyMs?: number;
+  details?: Record<string, number | string>;
+  error?: string;
+}
+
+export interface SystemStatusDto {
+  timestamp: string;
+  host: { cpuLoad1m: number; cpuCount: number; memUsedBytes: number; memTotalBytes: number };
+  components: StatusComponentDto[];
+}
