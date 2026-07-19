@@ -1,17 +1,12 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { Navigate } from "react-router-dom";
 import { AlertTriangle, CheckCircle2, XCircle } from "lucide-react";
 import { ComponentHealth, StatusComponentDto, SystemStatusDto } from "@webinairev2/shared-types";
 import { api } from "../../api/client";
 import { useAuth } from "../../auth/AuthProvider";
 import { DashboardLayout } from "../../components/layout/DashboardLayout";
-import { Sparkline } from "../../components/charts/Sparkline";
 
 const POLL_INTERVAL_MS = 5000;
-// Fenêtre d'historique gardée côté navigateur pour les sparklines — choix
-// "live seulement" acté avec l'utilisateur : pas de nouvelle table Postgres,
-// repart à zéro à chaque rechargement de page (5s × 60 ≈ 5 minutes glissantes).
-const HISTORY_LENGTH = 60;
 
 const DETAIL_LABELS: Record<string, string> = {
   rooms: "Salles",
@@ -91,37 +86,26 @@ function ComponentCard({ component }: { component: StatusComponentDto }) {
   );
 }
 
-function HostGauge({
-  label,
-  percent,
-  detail,
-  history,
-}: {
-  label: string;
-  percent: number;
-  detail: string;
-  history: number[];
-}) {
+// Même parti pris que le panneau de statut de livestreamv3 (StatusPanel.tsx) :
+// un taux d'utilisation instantané, pas de courbe dans le temps — demande
+// explicite de l'utilisateur, pas de nouvel historique à maintenir.
+function HostGauge({ label, percent, detail }: { label: string; percent: number; detail: string }) {
   // Mêmes seuils que les pastilles de composant (vert < 70%, ambre < 90%, rouge au-delà) —
   // une charge hôte élevée est un signal avant-coureur, pas encore une panne.
   const health: ComponentHealth = percent >= 90 ? "down" : percent >= 70 ? "degraded" : "up";
   return (
-    <div className="panel status-card">
+    <div className={`panel status-card status-card-${health}`}>
       <div className="status-card-header">
         <div className="status-card-title">
           <StatusDot status={health} />
           <span>{label}</span>
         </div>
-        <span className="status-latency">{detail}</span>
+        <span className={`status-gauge-percent status-dot-${health}`}>{percent.toFixed(0)}%</span>
       </div>
       <div className={`status-gauge-track status-gauge-${health}`}>
         <div className="status-gauge-fill" style={{ width: `${Math.min(100, percent)}%` }} />
       </div>
-      {/* status-dot-{health} pilote juste la couleur (currentColor) reprise par le SVG,
-          pas une vraie pastille ici — réutilise le même trio de classes de couleur. */}
-      <div className={`status-sparkline-wrap status-dot-${health}`}>
-        <Sparkline values={history} />
-      </div>
+      <span className="status-latency">{detail}</span>
     </div>
   );
 }
@@ -131,14 +115,6 @@ export function StatusPage() {
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<SystemStatusDto | null>(null);
   const [error, setError] = useState<string | null>(null);
-
-  const cpuHistoryRef = useRef<number[]>([]);
-  const memHistoryRef = useRef<number[]>([]);
-  const participantsHistoryRef = useRef<number[]>([]);
-  // Forcer un re-render après avoir poussé dans les refs d'historique ci-dessus
-  // (des refs seules ne déclenchent pas de rendu) — plus léger qu'un useState
-  // par série, on n'a besoin que d'un "tick" pour que les sparklines se redessinent.
-  const [, setHistoryTick] = useState(0);
 
   useEffect(() => {
     if (user?.role !== "ADMIN") return;
@@ -151,20 +127,6 @@ export function StatusPage() {
           if (cancelled) return;
           setStatus(s);
           setError(null);
-
-          const cpuPercent = (s.host.cpuLoad1m / s.host.cpuCount) * 100;
-          const memPercent = (s.host.memUsedBytes / s.host.memTotalBytes) * 100;
-          const livekit = s.components.find((c) => c.id === "livekit");
-          const participants = Number(livekit?.details?.participants ?? 0);
-
-          for (const [ref, value] of [
-            [cpuHistoryRef, cpuPercent],
-            [memHistoryRef, memPercent],
-            [participantsHistoryRef, participants],
-          ] as const) {
-            ref.current = [...ref.current, value].slice(-HISTORY_LENGTH);
-          }
-          setHistoryTick((t) => t + 1);
         })
         .catch((e) => {
           if (!cancelled) setError(e instanceof Error ? e.message : "Erreur inconnue");
@@ -210,13 +172,11 @@ export function StatusPage() {
               label="CPU (hôte)"
               percent={(status.host.cpuLoad1m / status.host.cpuCount) * 100}
               detail={`charge ${status.host.cpuLoad1m.toFixed(2)} / ${status.host.cpuCount} cœurs`}
-              history={cpuHistoryRef.current}
             />
             <HostGauge
               label="RAM (hôte)"
               percent={(status.host.memUsedBytes / status.host.memTotalBytes) * 100}
               detail={`${formatBytes(status.host.memUsedBytes)} / ${formatBytes(status.host.memTotalBytes)}`}
-              history={memHistoryRef.current}
             />
           </div>
 

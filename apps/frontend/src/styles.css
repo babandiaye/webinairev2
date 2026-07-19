@@ -2382,10 +2382,8 @@ button.stat-card:hover {
   color: var(--color-danger);
 }
 
-.status-sparkline-wrap {
-  display: flex;
-}
-.status-sparkline {
-  width: 100%;
-  height: 32px;
+.status-gauge-percent {
+  font-size: 1.1rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }
