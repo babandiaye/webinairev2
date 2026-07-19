@@ -148,6 +148,21 @@ export function RoomPage() {
       // dès l'entrée.
       video={canManage}
       audio={canManage}
+      // adaptiveStream/dynacast désactivés par défaut dans le SDK : sans eux,
+      // chaque piste vidéo est reçue/forwardée à sa couche simulcast la plus
+      // haute même pour une vignette minuscule ou masquée — négligeable à
+      // quelques participants, mais ça multiplie directement la bande passante
+      // d'egress par le nombre de spectateurs sur une salle à grande échelle
+      // (voir docs.livekit.io/home/client/tracks/subscribe).
+      options={{ adaptiveStream: true, dynacast: true }}
+      // autoSubscribe désactivé pour un spectateur : sur une salle à grande
+      // échelle, s'abonner automatiquement à TOUTES les pistes publiées
+      // (modérateur + chaque orateur secondaire) coûte cette bande passante
+      // ×(nombre de spectateurs). CallStage se charge de l'abonnement manuel
+      // à la seule piste principale pour ce rôle (voir son commentaire).
+      // Le modérateur, lui, garde l'auto-abonnement : il doit voir la grille
+      // complète et son nombre ne se multiplie jamais.
+      connectOptions={{ autoSubscribe: canManage }}
       onDisconnected={() => {
         if (switchingRef.current) {
           switchingRef.current = false;
@@ -183,7 +198,7 @@ export function RoomPage() {
         />
 
         <div className="call-stage-wrapper">
-          <CallStage />
+          <CallStage canManage={canManage} />
 
           {isInBreakout && (
             <BreakoutReturnBar title={activeConnection.room.title} onReturn={handleReturnToMain} />

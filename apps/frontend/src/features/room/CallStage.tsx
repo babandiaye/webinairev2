@@ -1,4 +1,6 @@
+import { useEffect, useRef } from "react";
 import { Track } from "livekit-client";
+import type { RemoteTrackPublication } from "livekit-client";
 import { useIsMuted, useLocalParticipant, useTracks, VideoTrack } from "@livekit/components-react";
 import type { TrackReference } from "@livekit/components-react";
 import { Video, VideoOff } from "lucide-react";
@@ -53,9 +55,18 @@ function StageVideo({ trackRef, compact }: { trackRef: TrackReference; compact?:
 // à montrer. Modèle repris de livestreamv3 : une seule vidéo principale (partage
 // d'écran en priorité, sinon la caméra du modérateur) + une petite bande de
 // vignettes secondaires pour les autres orateurs actifs.
-export function CallStage() {
+//
+// canManage=true par défaut : couvre l'appel sans prop de la vue Egress
+// (EgressRoomView), qui doit toujours capturer la grille complète pour
+// l'enregistrement — jamais soumise à la logique d'économie de bande passante
+// ci-dessous puisqu'elle ne compte qu'un seul abonné (le recorder headless).
+export function CallStage({ canManage = true }: { canManage?: boolean }) {
   const { localParticipant } = useLocalParticipant();
-  const tracks = useTracks([Track.Source.Camera, Track.Source.ScreenShare]);
+  // onlySubscribed:false pour un spectateur : autoSubscribe est désactivé côté
+  // connexion (voir RoomPage.tsx), donc les pistes publiées n'apparaissent pas
+  // encore comme "abonnées" — il faut néanmoins pouvoir les lister pour décider
+  // laquelle est la piste principale, avant même de s'y abonner.
+  const tracks = useTracks([Track.Source.Camera, Track.Source.ScreenShare], { onlySubscribed: false });
 
   const screenTrack = tracks.find((t) => t.source === Track.Source.ScreenShare);
   const camTracks = tracks.filter((t) => t.source === Track.Source.Camera);
@@ -66,6 +77,29 @@ export function CallStage() {
   );
 
   const mainTrack = screenTrack ?? mainCamTrack;
+
+  // Abonnement manuel pour un spectateur (canManage=false) : ne s'abonne
+  // JAMAIS aux pistes secondaires, et uniquement à la piste principale
+  // courante — se désabonne de l'ancienne dès qu'elle change (bascule
+  // modérateur ↔ partage d'écran, changement d'orateur…). Sur une salle à
+  // grande échelle, chaque piste abonnée en plus coûte sa bande passante
+  // ×(nombre de spectateurs) ; voir RoomPage.tsx pour le contexte complet.
+  const subscribedPubRef = useRef<RemoteTrackPublication | null>(null);
+  useEffect(() => {
+    if (canManage) return;
+    // Un spectateur ne publie jamais (canPublish=false par défaut), donc la
+    // piste principale ne devrait jamais être la sienne — ce garde-fou
+    // protège quand même setSubscribed(), absent de LocalTrackPublication.
+    const nextPub =
+      mainTrack && !mainTrack.participant.isLocal
+        ? (mainTrack.publication as RemoteTrackPublication)
+        : null;
+    if (subscribedPubRef.current === nextPub) return;
+    subscribedPubRef.current?.setSubscribed(false);
+    nextPub?.setSubscribed(true);
+    subscribedPubRef.current = nextPub;
+  }, [canManage, mainTrack]);
+
   const localRole: Role | undefined = (() => {
     try {
       return localParticipant.metadata ? JSON.parse(localParticipant.metadata).role : undefined;
@@ -88,7 +122,9 @@ export function CallStage() {
         )}
       </div>
 
-      {secondaryCamTracks.length > 0 && (
+      {/* Un spectateur ne s'abonne jamais à ces pistes (voir plus haut) : les
+          afficher pour lui n'aurait de toute façon aucune image à montrer. */}
+      {canManage && secondaryCamTracks.length > 0 && (
         <div className="call-stage-secondary">
           {secondaryCamTracks.map((t) => (
             <div className="call-stage-secondary-tile" key={t.participant.identity}>
