@@ -12,6 +12,7 @@ import { CallStage } from "./CallStage";
 import { CallControlBar } from "./CallControlBar";
 import { CallSideNav, CallPanel } from "./CallSideNav";
 import { CallSettingsModal } from "./CallSettingsModal";
+import { EchoWarningBanner } from "./EchoWarningBanner";
 import { BreakoutManagePanel } from "./BreakoutManagePanel";
 import { BreakoutAssignedBanner } from "./BreakoutAssignedBanner";
 import { BreakoutReturnBar } from "./BreakoutReturnBar";
@@ -24,6 +25,7 @@ import { PresentationsPanel } from "./PresentationsPanel";
 // attente qui se résout d'elle-même dès qu'un modérateur rejoint.
 const WAITING_FOR_MODERATOR_MESSAGE = "La réunion n'a pas encore commencé, en attente d'un modérateur";
 const RETRY_DELAY_MS = 5000;
+const SPEAKER_MUTED_KEY = "webinairev2.speakerMuted";
 
 export function RoomPage() {
   const { id } = useParams<{ id: string }>();
@@ -40,6 +42,14 @@ export function RoomPage() {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [mobileSideNavOpen, setMobileSideNavOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  // Couper SES PROPRES haut-parleurs : seul vrai remède quand deux appareils
+  // sont dans la même pièce (l'annulation d'écho du navigateur ne peut rien
+  // contre le haut-parleur du voisin — voir useEchoDetection). Persisté par
+  // appareil : celui qui est en salle avec d'autres le reste d'un cours à
+  // l'autre, sans avoir à y repenser.
+  const [speakerMuted, setSpeakerMuted] = useState(
+    () => localStorage.getItem(SPEAKER_MUTED_KEY) === "1"
+  );
   // Deux états distincts : `error` est FATAL (échec de la connexion initiale —
   // remplace toute la page), `actionError` signale l'échec d'une action pendant
   // l'appel (rejoindre un sous-groupe, ouvrir le tableau blanc) et s'affiche en
@@ -52,6 +62,10 @@ export function RoomPage() {
   // changement de salle déclenché par nous (breakout ↔ principale, → on ne doit
   // surtout pas rediriger l'utilisateur hors de l'appli dans ce cas).
   const switchingRef = useRef(false);
+
+  useEffect(() => {
+    localStorage.setItem(SPEAKER_MUTED_KEY, speakerMuted ? "1" : "0");
+  }, [speakerMuted]);
 
   useEffect(() => {
     if (!id) return;
@@ -164,7 +178,23 @@ export function RoomPage() {
       // quelques participants, mais ça multiplie directement la bande passante
       // d'egress par le nombre de spectateurs sur une salle à grande échelle
       // (voir docs.livekit.io/home/client/tracks/subscribe).
-      options={{ adaptiveStream: true, dynacast: true }}
+      // audioCaptureDefaults épinglés explicitement : ce sont déjà les valeurs
+      // par défaut de livekit-client 2.20 (vérifié dans le bundle), mais ces
+      // traitements sont la première ligne de défense contre le bruit et l'écho
+      // — les laisser implicites, c'est accepter qu'une future version du SDK
+      // les change sans que rien ne le signale ici. Attention : echoCancellation
+      // ne neutralise QUE le retour du haut-parleur de CET appareil ; deux
+      // appareils voisins relèvent de EchoWarningBanner/speakerMuted.
+      options={{
+        adaptiveStream: true,
+        dynacast: true,
+        audioCaptureDefaults: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+          voiceIsolation: true,
+        },
+      }}
       // autoSubscribe désactivé pour un spectateur : sur une salle à grande
       // échelle, s'abonner automatiquement à TOUTES les pistes publiées
       // (modérateur + chaque orateur secondaire) coûte cette bande passante
@@ -209,6 +239,8 @@ export function RoomPage() {
 
         <div className="call-stage-wrapper">
           <CallStage canManage={canManage} />
+
+          <EchoWarningBanner speakerMuted={speakerMuted} onMuteSpeakers={() => setSpeakerMuted(true)} />
 
           {actionError && (
             <div className="call-action-error">
@@ -255,6 +287,8 @@ export function RoomPage() {
           <CallControlBar
             roomId={activeConnection.room.id}
             canManage={canManage && !isInBreakout}
+            speakerMuted={speakerMuted}
+            onToggleSpeaker={() => setSpeakerMuted((v) => !v)}
             onOpenChat={() => {
               setSidebarTab("chat");
               setMobileSidebarOpen(true);
@@ -282,7 +316,7 @@ export function RoomPage() {
         onRoomUpdate={(room) => setActiveConnection((prev) => (prev ? { ...prev, room } : prev))}
       />
 
-      <RoomAudioRenderer />
+      <RoomAudioRenderer muted={speakerMuted} />
       <StartAudio label="Cliquer pour activer le son" />
     </LiveKitRoom>
   );

@@ -20,6 +20,8 @@ import {
   Users,
   Video,
   VideoOff,
+  Volume2,
+  VolumeX,
 } from "lucide-react";
 import { api } from "../../api/client";
 import { useRecordingStatus } from "./useRecordingStatus";
@@ -115,12 +117,18 @@ function SimpleControlButton({
 export function CallControlBar({
   roomId,
   canManage,
+  speakerMuted,
+  onToggleSpeaker,
   onOpenChat,
   onOpenParticipants,
   onOpenMore,
 }: {
   roomId: string;
   canManage: boolean;
+  // Sortie audio de CET appareil (voir RoomPage/RoomAudioRenderer) — remède
+  // aux échos quand plusieurs appareils partagent la même pièce.
+  speakerMuted: boolean;
+  onToggleSpeaker: () => void;
   onOpenChat: () => void;
   onOpenParticipants: () => void;
   // Sur mobile, CallSideNav (tableau blanc/sondages/présentations/sous-groupes)
@@ -225,6 +233,21 @@ export function CallControlBar({
         variant="mute"
         forceDisabled={!canUseCamera}
         disabledTitle="La caméra est désactivée pour les participants"
+      />
+
+      {/* Sortie audio locale, à côté du micro : dans une salle où plusieurs
+          appareils sont côte à côte, couper ses haut-parleurs est le seul geste
+          qui supprime réellement l'écho (l'annulation d'écho du navigateur ne
+          connaît que le son de son propre appareil). Visible par tout le monde,
+          participants compris — c'est leur appareil qui doit se taire. */}
+      <ControlButton
+        label="Haut-parleurs"
+        enabled={!speakerMuted}
+        pending={false}
+        onIcon={<Volume2 size={22} />}
+        offIcon={<VolumeX size={22} />}
+        buttonProps={{ onClick: onToggleSpeaker }}
+        variant="mute"
       />
 
       {/* Masqué (pas seulement désactivé) pour un participant sans droit de

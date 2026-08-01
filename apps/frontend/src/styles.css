@@ -2236,6 +2236,63 @@ button.stat-card:hover {
   font-size: 0.78rem;
   color: var(--color-danger);
 }
+.call-echo-warning {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 21;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: min(94%, 620px);
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: var(--color-warning-bg);
+  color: var(--color-warning);
+  border: 1px solid currentColor;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+}
+.call-echo-warning-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  font-size: 0.8rem;
+  line-height: 1.35;
+  min-width: 0;
+}
+.call-echo-warning-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  background: currentColor;
+  border: none;
+  border-radius: 8px;
+  padding: 7px 12px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+/* Le fond du bouton est currentColor (la teinte d'alerte) : son texte doit
+   reprendre le fond de la bannière pour rester lisible dans les deux thèmes. */
+.call-echo-warning-action > * {
+  color: var(--color-warning-bg);
+}
+.call-echo-warning-close {
+  display: inline-flex;
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  padding: 0;
+  opacity: 0.75;
+}
+.call-echo-warning-close:hover {
+  opacity: 1;
+}
+
 .call-action-error {
   position: absolute;
   top: 12px;
