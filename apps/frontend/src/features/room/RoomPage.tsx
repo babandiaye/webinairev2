@@ -1,6 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { LiveKitRoom, RoomAudioRenderer, StartAudio } from "@livekit/components-react";
+import {
+  LiveKitRoom,
+  RoomAudioRenderer,
+  StartAudio,
+  useRoomContext,
+} from "@livekit/components-react";
 import { X } from "lucide-react";
 import "@livekit/components-styles";
 import { JoinRoomResponseDto } from "@webinairev2/shared-types";
@@ -13,6 +18,7 @@ import { CallControlBar } from "./CallControlBar";
 import { CallSideNav, CallPanel } from "./CallSideNav";
 import { CallSettingsModal } from "./CallSettingsModal";
 import { EchoWarningBanner } from "./EchoWarningBanner";
+import { PreJoinScreen, DeviceSelection } from "./PreJoinScreen";
 import { BreakoutManagePanel } from "./BreakoutManagePanel";
 import { BreakoutAssignedBanner } from "./BreakoutAssignedBanner";
 import { BreakoutReturnBar } from "./BreakoutReturnBar";
@@ -26,6 +32,22 @@ import { PresentationsPanel } from "./PresentationsPanel";
 const WAITING_FOR_MODERATOR_MESSAGE = "La réunion n'a pas encore commencé, en attente d'un modérateur";
 const RETRY_DELAY_MS = 5000;
 const SPEAKER_MUTED_KEY = "webinairev2.speakerMuted";
+
+// Le choix de sortie audio ne passe pas par le token ni par les options de
+// connexion : il s'applique à la salle une fois connectée (switchActiveDevice).
+// Composant plutôt qu'effet dans RoomPage : useRoomContext n'existe qu'à
+// l'intérieur de <LiveKitRoom>.
+function ApplyAudioOutput({ deviceId }: { deviceId?: string }) {
+  const room = useRoomContext();
+  useEffect(() => {
+    if (!deviceId) return;
+    // Échec sans gravité : navigateur sans setSinkId, ou périphérique débranché
+    // entre l'écran de pré-connexion et l'entrée en salle — le son sort alors
+    // sur la sortie par défaut du système.
+    room.switchActiveDevice("audiooutput", deviceId).catch(() => {});
+  }, [room, deviceId]);
+  return null;
+}
 
 export function RoomPage() {
   const { id } = useParams<{ id: string }>();
@@ -58,6 +80,10 @@ export function RoomPage() {
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [waitingForModerator, setWaitingForModerator] = useState(false);
+  // null tant que l'écran de pré-connexion n'a pas été validé. Une fois rempli,
+  // il ne repasse jamais à null : changer de salle (principale ↔ sous-groupe) ne
+  // doit pas redemander de revérifier son matériel en plein cours.
+  const [deviceSelection, setDeviceSelection] = useState<DeviceSelection | null>(null);
   // Distingue un vrai départ (bouton "quitter", → retour à l'accueil) d'un
   // changement de salle déclenché par nous (breakout ↔ principale, → on ne doit
   // surtout pas rediriger l'utilisateur hors de l'appli dans ce cas).
@@ -125,6 +151,18 @@ export function RoomPage() {
   const canManage = activeConnection.room.canManage;
   const isInBreakout = activeConnection.room.type === "BREAKOUT";
 
+  // Vérification du matériel avant d'entrer : découvrir en plein cours que son
+  // micro capte le haut-parleur du voisin coûte l'attention de toute la classe.
+  if (!deviceSelection) {
+    return (
+      <PreJoinScreen
+        room={activeConnection.room}
+        canManage={canManage}
+        onJoin={setDeviceSelection}
+      />
+    );
+  }
+
   async function handleJoinBreakout(breakoutId: string) {
     if (!id) return;
     try {
@@ -185,15 +223,22 @@ export function RoomPage() {
       // les change sans que rien ne le signale ici. Attention : echoCancellation
       // ne neutralise QUE le retour du haut-parleur de CET appareil ; deux
       // appareils voisins relèvent de EchoWarningBanner/speakerMuted.
+      // deviceId : reprend le micro/la caméra validés à l'écran de pré-connexion,
+      // sinon LiveKit reprendrait le périphérique "par défaut" du système — qui
+      // n'est justement pas celui qu'on vient de tester.
       options={{
         adaptiveStream: true,
         dynacast: true,
         audioCaptureDefaults: {
+          ...(deviceSelection.audioinput ? { deviceId: deviceSelection.audioinput } : {}),
           echoCancellation: true,
           noiseSuppression: true,
           autoGainControl: true,
           voiceIsolation: true,
         },
+        ...(deviceSelection.videoinput
+          ? { videoCaptureDefaults: { deviceId: deviceSelection.videoinput } }
+          : {}),
       }}
       // autoSubscribe désactivé pour un spectateur : sur une salle à grande
       // échelle, s'abonner automatiquement à TOUTES les pistes publiées
@@ -316,6 +361,7 @@ export function RoomPage() {
         onRoomUpdate={(room) => setActiveConnection((prev) => (prev ? { ...prev, room } : prev))}
       />
 
+      <ApplyAudioOutput deviceId={deviceSelection.audiooutput} />
       <RoomAudioRenderer muted={speakerMuted} />
       <StartAudio label="Cliquer pour activer le son" />
     </LiveKitRoom>

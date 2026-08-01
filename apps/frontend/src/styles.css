@@ -2583,3 +2583,196 @@ button.stat-card:hover {
 .bar-chart {
   color: var(--color-primary);
 }
+
+/* ── Écran de pré-connexion (PreJoinScreen) ──────────────────────────────────
+   Fond sombre comme le reste de la salle d'appel, et non le thème clair du
+   tableau de bord : c'est déjà l'entrée dans la session. */
+.prejoin-screen {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: #0b1020;
+}
+.prejoin-card {
+  width: min(880px, 100%);
+  background: #121a2e;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius);
+  padding: 24px;
+  color: #fff;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+.prejoin-header h2 {
+  font-size: 1.15rem;
+  margin: 0;
+}
+.prejoin-header p {
+  margin: 4px 0 20px;
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.6);
+}
+.prejoin-body {
+  display: grid;
+  grid-template-columns: 1.1fr 1fr;
+  gap: 22px;
+}
+@media (max-width: 760px) {
+  .prejoin-body {
+    grid-template-columns: 1fr;
+  }
+}
+.prejoin-preview {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  background: #05070f;
+  border-radius: var(--radius);
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+.prejoin-video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  /* Aperçu de soi : inversé comme un miroir, sinon lever la main droite la fait
+     apparaître à gauche et l'utilisateur se croit face à un défaut d'affichage. */
+  transform: scaleX(-1);
+}
+.prejoin-preview-empty {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 0.82rem;
+  text-align: center;
+  padding: 0 20px;
+}
+.prejoin-meter {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: rgba(255, 255, 255, 0.75);
+  background: rgba(0, 0, 0, 0.45);
+  border-radius: 999px;
+  padding: 7px 12px;
+}
+.prejoin-meter-track {
+  flex: 1;
+  height: 5px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.15);
+  overflow: hidden;
+}
+.prejoin-meter-fill {
+  height: 100%;
+  width: 0%;
+  border-radius: 999px;
+  background: var(--color-success);
+  transition: width 80ms linear;
+}
+.prejoin-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 13px;
+}
+.prejoin-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.prejoin-field-label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 0.78rem;
+  color: rgba(255, 255, 255, 0.6);
+}
+.prejoin-select {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: var(--radius);
+  color: #fff;
+  font-size: 0.84rem;
+  padding: 10px 12px;
+}
+.prejoin-select option {
+  background: #121a2e;
+  color: #fff;
+}
+.prejoin-locked {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.78rem;
+  color: rgba(255, 255, 255, 0.55);
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+}
+.prejoin-tests {
+  display: flex;
+  gap: 9px;
+  flex-wrap: wrap;
+}
+.prejoin-tests .btn {
+  flex: 1;
+  min-width: 140px;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.85);
+  border-color: rgba(255, 255, 255, 0.18);
+}
+.prejoin-tests .btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+.prejoin-hint {
+  margin: 0;
+  font-size: 0.78rem;
+  color: rgba(255, 255, 255, 0.6);
+}
+.prejoin-verdict {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: var(--radius);
+  padding: 13px;
+  font-size: 0.84rem;
+}
+.prejoin-verdict-actions {
+  display: flex;
+  gap: 9px;
+}
+.prejoin-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  font-size: 0.79rem;
+  line-height: 1.45;
+  color: var(--color-warning);
+  background: rgba(217, 119, 6, 0.12);
+  border-radius: var(--radius);
+  padding: 11px 13px;
+}
+.prejoin-alert-ok {
+  color: var(--color-success);
+  background: rgba(22, 163, 74, 0.12);
+}
+.prejoin-footer {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 20px;
+}
+.prejoin-join {
+  min-width: 210px;
+  justify-content: center;
+}
