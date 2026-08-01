@@ -12,8 +12,21 @@ import { api } from "../../api/client";
 
 const DRAW_TOPIC = "wb";
 const CONTROL_TOPIC = "wb-control";
-const BROADCAST_DEBOUNCE_MS = 300;
+// CADENCE MAXIMALE de diffusion, et non un simple debounce : Excalidraw émet
+// onChange à CHAQUE mouvement du pointeur, donc un debounce pur (clearTimeout
+// systématique) ne se déclenchait jamais tant que le tracé continuait — le
+// participant ne voyait le trait qu'à la première pause de l'enseignant, d'où
+// les "quelques secondes" de retard observées sur un mot écrit d'un seul geste.
+// On garantit désormais au plus UN envoi toutes les 300 ms, mais aussi AU MOINS
+// un envoi toutes les 300 ms tant que le dessin bouge.
+const BROADCAST_INTERVAL_MS = 300;
+// Sauvegarde serveur : debounce (on attend le repos, inutile de solliciter
+// l'API à chaque trait) MAIS plafonné par SAVE_MAX_WAIT_MS, pour la même
+// raison — sans plafond, un tracé continu d'une minute ne sauvegardait rien,
+// et un participant qui ouvre le tableau à cet instant recevait un instantané
+// vieux d'une minute.
 const SAVE_DEBOUNCE_MS = 3000;
+const SAVE_MAX_WAIT_MS = 10000;
 const POLL_INTERVAL_MS = 4000;
 // Filet de rattrapage périodique pour un SPECTATEUR (jamais le modérateur, qui
 // est la source de vérité de son propre trait) : recharge l'instantané serveur
@@ -283,42 +296,90 @@ export function Whiteboard({ roomId, canManage }: { roomId: string; canManage: b
     followViewportRef.current = false;
   }, [canManage]);
 
+  // Toujours la scène la PLUS RÉCENTE au moment où le minuteur se déclenche :
+  // entre la planification et l'envoi, d'autres onChange sont arrivés, et
+  // diffuser la scène capturée à la planification perdrait ces traits-là.
+  const pendingElementsRef = useRef<readonly OrderedExcalidrawElement[]>([]);
+  // 0 volontairement : le tout premier trait part immédiatement, sans attendre
+  // l'intervalle — c'est le moment où la latence perçue compte le plus.
+  const lastBroadcastAtRef = useRef(0);
+  // Date.now() au contraire de ci-dessus : à 0, le plafond SAVE_MAX_WAIT_MS
+  // serait déjà dépassé au montage et le premier onChange (Excalidraw en émet
+  // un au chargement de la scène) déclencherait une sauvegarde immédiate,
+  // court-circuitant le debounce qu'on veut justement conserver ici.
+  const lastSaveAtRef = useRef(Date.now());
+
+  const flushBroadcast = useCallback(() => {
+    broadcastTimeoutRef.current = undefined;
+    lastBroadcastAtRef.current = Date.now();
+
+    // Delta uniquement : élément absent de lastSentVersionsRef (nouveau) ou
+    // dont la version a changé (modifié/déplacé/supprimé — une suppression
+    // est un passage isDeleted:true qui incrémente aussi version).
+    const changed = pendingElementsRef.current.filter(
+      (el) => lastSentVersionsRef.current.get(el.id) !== el.version
+    );
+    if (changed.length === 0) return;
+    for (const el of changed) lastSentVersionsRef.current.set(el.id, el.version);
+
+    // Envoi direct via room.localParticipant plutôt que le `send` fourni
+    // par useDataChannel — supprimé avec le hook lui-même (voir l'effet
+    // d'abonnement consolidé plus haut) : aucune raison de le réintroduire
+    // seulement pour l'émission, `room` étant de toute façon déjà stable.
+    room.localParticipant
+      .publishData(new TextEncoder().encode(JSON.stringify({ elements: changed })), {
+        reliable: true,
+        topic: DRAW_TOPIC,
+      })
+      .catch((e: unknown) => {
+        // Le message le plus probable : paquet > limite du data channel
+        // LiveKit — les autres participants resteront désynchronisés tant
+        // que ce n'est pas visible. Loggé plutôt qu'avalé silencieusement.
+        console.warn("Diffusion du tableau blanc échouée", e);
+      });
+  }, [room]);
+
+  const flushSave = useCallback(() => {
+    saveTimeoutRef.current = undefined;
+    lastSaveAtRef.current = Date.now();
+    api
+      .saveWhiteboard(roomId, { sceneData: { elements: pendingElementsRef.current } })
+      .catch(() => {});
+  }, [roomId]);
+
   const handleChange = useCallback(
     (elements: readonly OrderedExcalidrawElement[]) => {
       if (!canBroadcast) return;
+      pendingElementsRef.current = elements;
+      const now = Date.now();
 
+      // Diffusion à cadence garantie (voir BROADCAST_INTERVAL_MS) : envoi
+      // immédiat si le dernier remonte à plus de l'intervalle, sinon on
+      // planifie POUR LE SOLDE du temps restant — et surtout on ne replanifie
+      // pas si un envoi est déjà en attente, ce qui est précisément ce qui
+      // repoussait indéfiniment l'échéance avec l'ancien debounce.
+      const sinceBroadcast = now - lastBroadcastAtRef.current;
+      if (sinceBroadcast >= BROADCAST_INTERVAL_MS) {
+        clearTimeout(broadcastTimeoutRef.current);
+        flushBroadcast();
+      } else if (broadcastTimeoutRef.current === undefined) {
+        broadcastTimeoutRef.current = setTimeout(
+          flushBroadcast,
+          BROADCAST_INTERVAL_MS - sinceBroadcast
+        );
+      }
+
+      // Sauvegarde : debounce classique (attendre le repos), mais l'échéance
+      // ne peut jamais être repoussée au-delà de SAVE_MAX_WAIT_MS depuis la
+      // dernière sauvegarde effective.
+      const remainingBeforeForcedSave = SAVE_MAX_WAIT_MS - (now - lastSaveAtRef.current);
       clearTimeout(saveTimeoutRef.current);
-      saveTimeoutRef.current = setTimeout(() => {
-        api.saveWhiteboard(roomId, { sceneData: { elements } }).catch(() => {});
-      }, SAVE_DEBOUNCE_MS);
-
-      clearTimeout(broadcastTimeoutRef.current);
-      broadcastTimeoutRef.current = setTimeout(() => {
-        // Delta uniquement : élément absent de lastSentVersionsRef (nouveau) ou
-        // dont la version a changé (modifié/déplacé/supprimé — une suppression
-        // est un passage isDeleted:true qui incrémente aussi version).
-        const changed = elements.filter((el) => lastSentVersionsRef.current.get(el.id) !== el.version);
-        if (changed.length === 0) return;
-        for (const el of changed) lastSentVersionsRef.current.set(el.id, el.version);
-
-        // Envoi direct via room.localParticipant plutôt que le `send` fourni
-        // par useDataChannel — supprimé avec le hook lui-même (voir l'effet
-        // d'abonnement consolidé plus haut) : aucune raison de le réintroduire
-        // seulement pour l'émission, `room` étant de toute façon déjà stable.
-        room.localParticipant
-          .publishData(new TextEncoder().encode(JSON.stringify({ elements: changed })), {
-            reliable: true,
-            topic: DRAW_TOPIC,
-          })
-          .catch((e: unknown) => {
-            // Le message le plus probable : paquet > limite du data channel
-            // LiveKit — les autres participants resteront désynchronisés tant
-            // que ce n'est pas visible. Loggé plutôt qu'avalé silencieusement.
-            console.warn("Diffusion du tableau blanc échouée", e);
-          });
-      }, BROADCAST_DEBOUNCE_MS);
+      saveTimeoutRef.current = setTimeout(
+        flushSave,
+        Math.max(0, Math.min(SAVE_DEBOUNCE_MS, remainingBeforeForcedSave))
+      );
     },
-    [roomId, room, canBroadcast]
+    [canBroadcast, flushBroadcast, flushSave]
   );
 
   useEffect(
