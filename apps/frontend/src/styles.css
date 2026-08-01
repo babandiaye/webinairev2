@@ -2236,6 +2236,33 @@ button.stat-card:hover {
   font-size: 0.78rem;
   color: var(--color-danger);
 }
+.call-settings-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+}
+.call-settings-action-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid transparent;
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 0.84rem;
+  padding: 10px 14px;
+  border-radius: 10px;
+  cursor: pointer;
+  text-align: left;
+}
+.call-settings-action-btn:hover {
+  background: rgba(255, 255, 255, 0.09);
+}
+.call-settings-action-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
 .call-settings-device-list {
   display: flex;
   flex-direction: column;

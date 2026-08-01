@@ -83,6 +83,8 @@ export const api = {
       body: JSON.stringify({ grant }),
     }),
   muteAllParticipants: (roomId: string) => request<{ ok: true }>(`/rooms/${roomId}/mute-all`, { method: "POST" }),
+  muteAllCameras: (roomId: string) =>
+    request<{ ok: true }>(`/rooms/${roomId}/mute-all-cameras`, { method: "POST" }),
 
   listRecordings: (roomId: string) => request<RecordingDto[]>(`/rooms/${roomId}/recordings`),
   startRecording: (roomId: string) =>

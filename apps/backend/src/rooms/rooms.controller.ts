@@ -98,4 +98,11 @@ export class RoomsController {
     await this.rooms.muteAllParticipants(id);
     return { ok: true };
   }
+
+  @Post(":id/mute-all-cameras")
+  @RequireRoomAccess()
+  async muteAllCameras(@Param("id") id: string) {
+    await this.rooms.muteAllCameras(id);
+    return { ok: true };
+  }
 }

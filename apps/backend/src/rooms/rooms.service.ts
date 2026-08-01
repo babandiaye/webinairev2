@@ -400,6 +400,54 @@ export class RoomsService {
         canPublish: canPublishSources.length > 0,
         canPublishSources,
       });
+
+      // Verrouiller ne fait pas que retirer le droit de republier plus tard —
+      // ça coupe aussi, immédiatement, ce que le participant diffusait déjà
+      // (sinon "verrouiller" resterait sans effet visible tant qu'il ne coupe
+      // pas lui-même son micro/sa caméra).
+      for (const track of participant.tracks) {
+        const shouldCut =
+          (room.micLocked && track.source === TrackSource.MICROPHONE) ||
+          (room.cameraLocked && track.source === TrackSource.CAMERA);
+        if (!shouldCut || track.muted) continue;
+        await this.livekitClients.roomService.mutePublishedTrack(
+          room.roomName,
+          participant.identity,
+          track.sid,
+          true
+        );
+      }
+    }
+  }
+
+  // "Couper tous les micros" existe déjà (muteAllParticipants) — pendant du
+  // même bouton pour la caméra dans le panneau Paramètres. Mute immédiat, ne
+  // touche pas à l'autorisation : un participant dont la caméra est
+  // déverrouillée (cameraLocked=false) peut la rallumer lui-même ensuite,
+  // contrairement à un verrouillage (voir applySettingsToConnectedParticipants).
+  async muteAllCameras(roomId: string): Promise<void> {
+    const room = await this.findOneOrThrow(roomId);
+    const participants = await this.livekitClients.roomService.listParticipants(room.roomName);
+
+    for (const participant of participants) {
+      let isModerator = false;
+      try {
+        isModerator = participant.metadata ? JSON.parse(participant.metadata).isModerator === true : false;
+      } catch {
+        // metadata malformée ignorée — traité comme non-modérateur
+      }
+      if (isModerator) continue;
+
+      const videoTrack = participant.tracks.find(
+        (t) => t.type === TrackType.VIDEO && t.source === TrackSource.CAMERA && !t.muted
+      );
+      if (!videoTrack) continue;
+      await this.livekitClients.roomService.mutePublishedTrack(
+        room.roomName,
+        participant.identity,
+        videoTrack.sid,
+        true
+      );
     }
   }
 

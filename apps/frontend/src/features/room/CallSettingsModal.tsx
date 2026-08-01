@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Camera, Check, Mic, RefreshCw, Volume2, X } from "lucide-react";
+import { Camera, Check, Mic, MicOff, RefreshCw, VideoOff, Volume2, X } from "lucide-react";
 import { useMediaDeviceSelect } from "@livekit/components-react";
 import { RoomDto, UpdateRoomSettingsDto } from "@webinairev2/shared-types";
 import { api } from "../../api/client";
@@ -107,6 +107,21 @@ export function CallSettingsModal({
     }
   }
 
+  // Action ponctuelle ("couper maintenant") — distincte des interrupteurs
+  // ci-dessus : ne change pas le verrouillage persistant, coupe juste ce qui
+  // est actif à cet instant (un participant déverrouillé peut se rallumer).
+  async function cutAll(action: () => Promise<{ ok: true }>) {
+    setBusy(true);
+    setError(null);
+    try {
+      await action();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Erreur inconnue");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <div className="call-settings-backdrop" onClick={onClose}>
       <div className="call-settings-modal" onClick={(e) => e.stopPropagation()}>
@@ -144,6 +159,24 @@ export function CallSettingsModal({
               busy={busy}
               onChange={(cameraLocked) => updateSettings({ cameraLocked })}
             />
+            <div className="call-settings-actions">
+              <button
+                className="call-settings-action-btn"
+                disabled={busy}
+                onClick={() => cutAll(() => api.muteAllParticipants(roomId))}
+              >
+                <MicOff size={15} />
+                Couper tous les micros maintenant
+              </button>
+              <button
+                className="call-settings-action-btn"
+                disabled={busy}
+                onClick={() => cutAll(() => api.muteAllCameras(roomId))}
+              >
+                <VideoOff size={15} />
+                Couper toutes les caméras maintenant
+              </button>
+            </div>
             {error && <p className="call-settings-error">{error}</p>}
           </div>
         )}
