@@ -1,12 +1,12 @@
 import { useState } from "react";
 import { Hand, Mic, MicOff, ScreenShare, UserX, X } from "lucide-react";
-import { useDataChannel, useParticipants } from "@livekit/components-react";
+import { useParticipants } from "@livekit/components-react";
 import type { Role } from "@webinairev2/shared-types";
 import { api } from "../../api/client";
 import { CallChat } from "./CallChat";
+import { useRoomSignals } from "./useRoomSignals";
 
 export type SidebarTab = "participants" | "chat";
-const HAND_RAISE_TOPIC = "hand-raise";
 
 // Valeurs de l'enum TrackSource de @livekit/protocol (non ré-importé côté
 // frontend pour éviter une dépendance directe à un sous-paquet non exposé par
@@ -54,17 +54,13 @@ export function CallSidebar({
   const participants = useParticipants();
   const [actionBusy, setActionBusy] = useState<string | null>(null);
   // Main levée : signal éphémère, pas de persistance nécessaire (comme un
-  // indicateur "en train d'écrire") — diffusé par CallControlBar, affiché ici.
-  const [raisedHands, setRaisedHands] = useState<Record<string, boolean>>({});
-
-  useDataChannel(HAND_RAISE_TOPIC, (msg) => {
-    try {
-      const { identity, raised } = JSON.parse(new TextDecoder().decode(msg.payload));
-      setRaisedHands((prev) => ({ ...prev, [identity]: raised }));
-    } catch {
-      // message malformé ignoré
-    }
-  });
+  // indicateur "en train d'écrire") — état partagé, voir RoomSignalsProvider.
+  const { raisedHands, lowerHand, lowerAllHands } = useRoomSignals();
+  // Position dans la file, par ordre d'arrivée : sans elle, le modérateur voit
+  // bien "trois mains levées" mais n'a aucun moyen de savoir qui attend depuis
+  // le plus longtemps — et donne la parole au premier nom de la liste, qui est
+  // l'ordre alphabétique des participants, pas celui de la demande.
+  const handPosition = new Map(raisedHands.map((hand, index) => [hand.identity, index + 1]));
 
   async function handleMute(identity: string) {
     setActionBusy(identity);
@@ -94,8 +90,10 @@ export function CallSidebar({
     setActionBusy(identity);
     try {
       await api.setSpeakerPermission(roomId, identity, grant);
-      // La main levée n'a plus lieu d'être une fois la parole accordée.
-      if (grant) setRaisedHands((prev) => ({ ...prev, [identity]: false }));
+      // La main levée n'a plus lieu d'être une fois la parole accordée — et le
+      // retrait est maintenant diffusé à tout le monde, plus seulement masqué
+      // dans la vue du modérateur qui a cliqué.
+      if (grant) lowerHand(identity);
     } catch {
       // idem
     } finally {
@@ -144,6 +142,17 @@ export function CallSidebar({
           <CallChat />
         </div>
         <div className={`call-sidebar-pane ${tab === "participants" ? "" : "call-sidebar-pane-hidden"}`}>
+          {canManage && raisedHands.length > 0 && (
+            <div className="call-hand-queue">
+              <span>
+                {raisedHands.length} main{raisedHands.length > 1 ? "s" : ""} levée
+                {raisedHands.length > 1 ? "s" : ""} — {raisedHands[0].name} en premier
+              </span>
+              <button className="call-hand-queue-clear" onClick={lowerAllHands}>
+                Tout baisser
+              </button>
+            </div>
+          )}
           <div className="call-participant-list">
             {participants.map((p) => {
               const meta = parseMetadata(p.metadata);
@@ -152,7 +161,8 @@ export function CallSidebar({
               const sources = p.permissions?.canPublishSources ?? [];
               const canSpeak = sources.includes(TRACK_SOURCE_MICROPHONE);
               const canPresent = sources.includes(TRACK_SOURCE_SCREEN_SHARE);
-              const handRaised = raisedHands[p.identity] ?? false;
+              const handRank = handPosition.get(p.identity);
+              const handRaised = handRank !== undefined;
 
               return (
                 <div className="call-participant-row" key={p.identity}>
@@ -164,7 +174,22 @@ export function CallSidebar({
                     {label && <span className="call-participant-role">{label}</span>}
                   </div>
                   <div className="call-participant-status">
-                    {handRaised && <Hand size={14} className="call-participant-hand" />}
+                    {handRaised &&
+                      (canManage ? (
+                        <button
+                          className="call-hand-rank"
+                          title={`${handRank}ᵉ dans la file — cliquer pour baisser`}
+                          onClick={() => lowerHand(p.identity)}
+                        >
+                          <Hand size={13} />
+                          {handRank}
+                        </button>
+                      ) : (
+                        <span className="call-hand-rank call-hand-rank-static" title={`${handRank}ᵉ dans la file`}>
+                          <Hand size={13} />
+                          {handRank}
+                        </span>
+                      ))}
                     {!p.isMicrophoneEnabled && <MicOff size={14} className="call-participant-muted" />}
                   </div>
                   {canManage && p.identity !== localIdentity && (

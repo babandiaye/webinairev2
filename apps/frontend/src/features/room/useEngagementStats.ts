@@ -3,6 +3,7 @@ import { RoomEvent } from "livekit-client";
 import type { Participant } from "livekit-client";
 import { useRoomContext } from "@livekit/components-react";
 import { isModeratorMetadata } from "./participantMeta";
+import { HAND_RAISE_TOPIC, REACTION_TOPIC } from "./useRoomSignals";
 
 // Cadence de rafraîchissement de l'affichage. Les compteurs, eux, sont exacts à
 // la milliseconde : ils sont alimentés par les évènements LiveKit, pas par cet
@@ -20,6 +21,8 @@ export type ParticipantEngagement = {
   /** Nombre de prises de parole distinctes. */
   talkTurns: number;
   chatMessages: number;
+  reactions: number;
+  handRaises: number;
   /** Nombre de connexions à la séance (> 1 = a été coupé puis revenu). */
   connections: number;
   present: boolean;
@@ -39,6 +42,8 @@ type Accumulator = {
   speakingSince: number | null;
   talkTurns: number;
   chatMessages: number;
+  reactions: number;
+  handRaises: number;
   connections: number;
 };
 
@@ -108,6 +113,8 @@ export function EngagementProvider({
         speakingSince: null,
         talkTurns: 0,
         chatMessages: 0,
+        reactions: 0,
+        handRaises: 0,
         connections: 1,
       };
       accumulators.set(participant.identity, created);
@@ -181,16 +188,49 @@ export function EngagementProvider({
       ensure(participant).chatMessages += 1;
     }
 
+    // Réactions et mains levées transitent par le canal de données (voir
+    // useRoomSignals) : on les compte à la source plutôt que de les faire
+    // remonter par un second chemin. Seules celles REÇUES sont comptées —
+    // publishData n'étant pas ré-émis vers son expéditeur, l'animateur ne verra
+    // pas ses propres réactions dans le tableau, ce qui est sans conséquence
+    // puisque c'est l'engagement des étudiants qu'il vient y lire.
+    function handleSignal(
+      payload: Uint8Array,
+      participant?: Participant,
+      _kind?: unknown,
+      topic?: string
+    ) {
+      if (!participant) return;
+      if (topic === REACTION_TOPIC) {
+        ensure(participant).reactions += 1;
+        return;
+      }
+      if (topic !== HAND_RAISE_TOPIC) return;
+      try {
+        const message = JSON.parse(new TextDecoder().decode(payload));
+        // Seule une main qui SE LÈVE compte : `raisedAgoMs: null` est une main
+        // baissée, et une réponse de resynchronisation rejoue une main déjà
+        // comptée — la compter deux fois gonflerait le total à chaque arrivée.
+        if (message?.t === "set" && message.raisedAgoMs === 0) {
+          ensure(participant).handRaises += 1;
+        }
+      } catch {
+        // message malformé ignoré
+      }
+    }
+
     room.on(RoomEvent.ParticipantConnected, handleConnected);
     room.on(RoomEvent.ParticipantDisconnected, handleDisconnected);
     room.on(RoomEvent.ActiveSpeakersChanged, handleActiveSpeakers);
     room.on(RoomEvent.ChatMessage, handleChatMessage);
+    room.on(RoomEvent.DataReceived, handleSignal);
 
     return () => {
       room.off(RoomEvent.ParticipantConnected, handleConnected);
       room.off(RoomEvent.ParticipantDisconnected, handleDisconnected);
       room.off(RoomEvent.ActiveSpeakersChanged, handleActiveSpeakers);
       room.off(RoomEvent.ChatMessage, handleChatMessage);
+      room.off(RoomEvent.DataReceived, handleSignal);
     };
   }, [room, enabled]);
 
@@ -215,6 +255,8 @@ export function EngagementProvider({
                 (accumulator.speakingSince !== null ? now - accumulator.speakingSince : 0),
               talkTurns: accumulator.talkTurns,
               chatMessages: accumulator.chatMessages,
+              reactions: accumulator.reactions,
+              handRaises: accumulator.handRaises,
               connections: accumulator.connections,
               present: accumulator.presentSince !== null,
               micOn: live?.isMicrophoneEnabled ?? false,

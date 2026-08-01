@@ -12,6 +12,8 @@ const COLUMNS = [
   "Temps de parole",
   "Prises de parole",
   "Messages",
+  "Réactions",
+  "Mains levées",
   "Connexions",
   "État",
 ] as const;
@@ -44,6 +46,8 @@ function buildCsv(rows: ParticipantEngagement[]): string {
         formatDuration(row.talkMs),
         row.talkTurns,
         row.chatMessages,
+        row.reactions,
+        row.handRaises,
         row.connections,
         stateLabel(row),
       ].join(";")
@@ -170,6 +174,8 @@ export function EngagementPanel({
                   <th>Parole</th>
                   <th>Prises</th>
                   <th>Msg</th>
+                  <th>Réac.</th>
+                  <th>Mains</th>
                   <th>Cnx</th>
                   <th>État</th>
                 </tr>
@@ -199,6 +205,8 @@ export function EngagementPanel({
                     </td>
                     <td>{row.talkTurns}</td>
                     <td>{row.chatMessages}</td>
+                    <td>{row.reactions}</td>
+                    <td>{row.handRaises}</td>
                     <td>{row.connections}</td>
                     <td>
                       <div className="engagement-state">
@@ -243,6 +251,8 @@ export function EngagementPanel({
                 <td>{formatDuration(row.talkMs)}</td>
                 <td>{row.talkTurns}</td>
                 <td>{row.chatMessages}</td>
+                <td>{row.reactions}</td>
+                <td>{row.handRaises}</td>
                 <td>{row.connections}</td>
                 <td>{stateLabel(row)}</td>
               </tr>

@@ -1,8 +1,6 @@
 import { useState } from "react";
 import { Track } from "livekit-client";
 import {
-  useDataChannel,
-  useLocalParticipant,
   useLocalParticipantPermissions,
   useRoomContext,
   useTrackToggle,
@@ -16,6 +14,7 @@ import {
   MicOff,
   MoreHorizontal,
   ScreenShare,
+  Smile,
   Square,
   Users,
   Video,
@@ -25,8 +24,7 @@ import {
 } from "lucide-react";
 import { api } from "../../api/client";
 import { useRecordingStatus } from "./useRecordingStatus";
-
-const HAND_RAISE_TOPIC = "hand-raise";
+import { REACTIONS, useRoomSignals } from "./useRoomSignals";
 
 // Valeurs de l'enum TrackSource de @livekit/protocol — voir le même commentaire
 // dans CallSidebar.tsx.
@@ -140,9 +138,11 @@ export function CallControlBar({
   const mic = useTrackToggle({ source: Track.Source.Microphone });
   const camera = useTrackToggle({ source: Track.Source.Camera });
   const screenShare = useTrackToggle({ source: Track.Source.ScreenShare });
-  const { localParticipant } = useLocalParticipant();
-  const [handRaised, setHandRaised] = useState(false);
-  const { send: sendHandRaise } = useDataChannel(HAND_RAISE_TOPIC);
+  // État partagé avec la liste des participants et la scène : une instance par
+  // composant se contredirait, publishData n'étant pas ré-émis vers son
+  // expéditeur (voir RoomSignalsProvider).
+  const { isRaised, toggleHand, sendReaction } = useRoomSignals();
+  const [reactionsOpen, setReactionsOpen] = useState(false);
 
   // Un participant démarre sans droit de publication (voir livekit-token.service.ts) —
   // le modérateur l'accorde par salle (CallSidebar), jamais par un simple clic
@@ -194,15 +194,6 @@ export function CallControlBar({
     } finally {
       setRecordingBusy(false);
     }
-  }
-
-  function toggleHandRaise() {
-    const next = !handRaised;
-    setHandRaised(next);
-    sendHandRaise(
-      new TextEncoder().encode(JSON.stringify({ identity: localParticipant.identity, raised: next })),
-      { reliable: true }
-    );
   }
 
   return (
@@ -297,11 +288,40 @@ export function CallControlBar({
       )}
 
       <SimpleControlButton
-        label={handRaised ? "Baisser la main" : "Lever la main"}
+        label={isRaised ? "Baisser la main" : "Lever la main"}
         icon={<Hand size={22} />}
-        active={handRaised}
-        onClick={toggleHandRaise}
+        active={isRaised}
+        onClick={toggleHand}
       />
+
+      {/* Réactions : le seul retour possible pour un étudiant dont le micro est
+          verrouillé, sans interrompre l'enseignant. Le choix se referme après un
+          clic — enchaîner les émojis n'apporte rien et brouille la scène. */}
+      <div className="call-reaction-wrap">
+        {reactionsOpen && (
+          <div className="call-reaction-picker">
+            {REACTIONS.map((emoji) => (
+              <button
+                key={emoji}
+                className="call-reaction-btn"
+                onClick={() => {
+                  sendReaction(emoji);
+                  setReactionsOpen(false);
+                }}
+                aria-label={`Réagir ${emoji}`}
+              >
+                {emoji}
+              </button>
+            ))}
+          </div>
+        )}
+        <SimpleControlButton
+          label="Réagir"
+          icon={<Smile size={22} />}
+          active={reactionsOpen}
+          onClick={() => setReactionsOpen((v) => !v)}
+        />
+      </div>
 
       <SimpleControlButton label="Discussion" icon={<MessageSquare size={22} />} onClick={onOpenChat} />
 

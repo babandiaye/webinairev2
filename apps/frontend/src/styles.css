@@ -2951,3 +2951,143 @@ button.stat-card:hover {
     break-inside: avoid;
   }
 }
+
+/* ── Réactions et file des mains levées ──────────────────────────────────── */
+.reactions-overlay {
+  position: absolute;
+  left: 16px;
+  bottom: 16px;
+  z-index: 22;
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 6px;
+  /* Purement décoratif : sans ça, la couche intercepterait les clics sur la
+     vidéo et les contrôles qu'elle recouvre. */
+  pointer-events: none;
+}
+.reaction-float {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  background: rgba(0, 0, 0, 0.5);
+  border-radius: 999px;
+  padding: 5px 12px 5px 8px;
+  color: #fff;
+  animation: reaction-rise 4s ease-out forwards;
+}
+.reaction-emoji {
+  font-size: 1.15rem;
+  line-height: 1;
+}
+.reaction-name {
+  font-size: 0.75rem;
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+@keyframes reaction-rise {
+  0% {
+    opacity: 0;
+    transform: translateY(14px) scale(0.85);
+  }
+  12% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  75% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-26px);
+  }
+}
+/* Respecte le réglage système : une animation qui traverse l'écran peut gêner
+   les personnes sensibles au mouvement. La réaction reste lisible, immobile. */
+@media (prefers-reduced-motion: reduce) {
+  .reaction-float {
+    animation: none;
+  }
+}
+
+.call-reaction-wrap {
+  position: relative;
+  display: flex;
+}
+/* Positionnement FIXE et non absolu : le bouton vit dans .call-control-scroll,
+   qui a overflow-x:auto — ce qui rend aussi overflow-y calculé à auto, donc
+   découperait net un menu débordant vers le haut. Ancré au-dessus de la barre de
+   contrôle, elle-même toujours en bas de la scène. */
+.call-reaction-picker {
+  position: fixed;
+  bottom: 104px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 3px;
+  background: #121a2e;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  padding: 5px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  z-index: 23;
+}
+.call-reaction-btn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-size: 1.25rem;
+  line-height: 1;
+  padding: 5px 6px;
+  border-radius: 999px;
+}
+.call-reaction-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.call-hand-queue {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 9px;
+  padding: 9px 11px;
+  border-radius: var(--radius);
+  background: rgba(217, 119, 6, 0.15);
+  color: var(--color-warning);
+  font-size: 0.76rem;
+}
+.call-hand-queue-clear {
+  background: transparent;
+  border: 1px solid currentColor;
+  color: inherit;
+  border-radius: var(--radius);
+  font-size: 0.72rem;
+  padding: 4px 9px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.call-hand-queue-clear:hover {
+  background: rgba(217, 119, 6, 0.2);
+}
+.call-hand-rank {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: rgba(217, 119, 6, 0.2);
+  color: var(--color-warning);
+  border: none;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  padding: 2px 7px 2px 5px;
+  cursor: pointer;
+}
+.call-hand-rank:hover {
+  background: rgba(217, 119, 6, 0.32);
+}
+.call-hand-rank-static {
+  cursor: default;
+}

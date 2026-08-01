@@ -21,6 +21,8 @@ import { EchoWarningBanner } from "./EchoWarningBanner";
 import { PreJoinScreen, DeviceSelection } from "./PreJoinScreen";
 import { EngagementProvider } from "./useEngagementStats";
 import { EngagementPanel } from "./EngagementPanel";
+import { RoomSignalsProvider } from "./useRoomSignals";
+import { ReactionsOverlay } from "./ReactionsOverlay";
 import { BreakoutManagePanel } from "./BreakoutManagePanel";
 import { BreakoutAssignedBanner } from "./BreakoutAssignedBanner";
 import { BreakoutReturnBar } from "./BreakoutReturnBar";
@@ -263,6 +265,7 @@ export function RoomPage() {
           qui le consulte à la 40e minute ne verrait rien des 40 premières.
           Ne provoque aucun rendu de ses enfants (voir useEngagementStats). */}
       <EngagementProvider enabled={canManage}>
+      <RoomSignalsProvider localIdentity={user.id}>
       <CallSideNav
         canManage={canManage}
         isInBreakout={isInBreakout}
@@ -291,6 +294,8 @@ export function RoomPage() {
 
         <div className="call-stage-wrapper">
           <CallStage canManage={canManage} />
+
+          <ReactionsOverlay />
 
           <EchoWarningBanner speakerMuted={speakerMuted} onMuteSpeakers={() => setSpeakerMuted(true)} />
 
@@ -378,6 +383,7 @@ export function RoomPage() {
       <ApplyAudioOutput deviceId={deviceSelection.audiooutput} />
       <RoomAudioRenderer muted={speakerMuted} />
       <StartAudio label="Cliquer pour activer le son" />
+      </RoomSignalsProvider>
       </EngagementProvider>
     </LiveKitRoom>
   );
