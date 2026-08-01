@@ -15,6 +15,7 @@ import {
 import { ActivityStatsDto, RoomDto, StatsRange } from "@webinairev2/shared-types";
 import { useAuth } from "../../auth/AuthProvider";
 import { api } from "../../api/client";
+import { BRAND } from "../../lib/brand";
 import { StatusBadge } from "../../components/ui/StatusBadge";
 import { StatCard } from "../../components/ui/StatCard";
 import { DashboardLayout } from "../../components/layout/DashboardLayout";
@@ -130,21 +131,32 @@ export function HomePage() {
 
   return (
     <DashboardLayout user={user} search={search} onSearchChange={setSearch}>
+      {/* Titre de section et repère de date, pas d'accroche : "Bienvenue" et
+          l'emoji en guise d'icône n'apportaient aucune information à quelqu'un
+          qui ouvre son tableau de bord pour la troisième fois de la journée. */}
       <div className="dashboard-welcome">
-        <h2>Bienvenue, {user.givenName} 👋</h2>
-        <p>Voici ce qui se passe sur votre plateforme Webinaire aujourd'hui.</p>
+        <h2>Cours magistraux</h2>
+        <p>
+          {new Date().toLocaleDateString("fr-FR", {
+            weekday: "long",
+            day: "numeric",
+            month: "long",
+            year: "numeric",
+          })}
+          {stats.live > 0 && ` · ${stats.live} séance${stats.live > 1 ? "s" : ""} en direct`}
+        </p>
       </div>
 
       <div className="stat-grid">
-        <StatCard label="Salles (CM) totales" value={stats.total} icon={DoorOpen} color="#2563eb" />
-        <StatCard label="En direct" value={stats.live} icon={Radio} color="#dc2626" pulse />
-        <StatCard label="Terminées" value={stats.ended} icon={CheckCircle2} color="#15803d" />
+        <StatCard label="Salles (CM) totales" value={stats.total} icon={DoorOpen} color={BRAND.blue} />
+        <StatCard label="En direct" value={stats.live} icon={Radio} color={BRAND.red} pulse />
+        <StatCard label="Terminées" value={stats.ended} icon={CheckCircle2} color={BRAND.green} />
         {isAdmin && userCount !== null && (
           <StatCard
             label="Utilisateurs"
             value={userCount}
             icon={Users}
-            color="#7c3aed"
+            color={BRAND.slate}
             onClick={() => navigate("/admin/users")}
           />
         )}
@@ -153,7 +165,7 @@ export function HomePage() {
             label="Enregistrements"
             value={recordingCount}
             icon={Video}
-            color="#0891b2"
+            color={BRAND.orange}
             onClick={() => navigate("/recordings")}
           />
         )}

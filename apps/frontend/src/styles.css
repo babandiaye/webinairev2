@@ -1,98 +1,141 @@
-:root {
-  --color-bg: #f3f5f9;
-  --color-surface: #ffffff;
-  --color-border: #e5e8ee;
-  --color-text: #111827;
-  --color-text-muted: #6b7280;
+/* ── Charte UNCHK ─────────────────────────────────────────────────────────────
+   Couleurs relevées directement dans le logo officiel (logo-unchk.png) plutôt
+   qu'approchées à l'œil : bleu #046FB7, ardoise #274958, orange #E28423, vert
+   #179F47. L'ancienne palette était celle, reconnaissable entre toutes, des
+   valeurs par défaut de Tailwind (#2563eb, #dc2626, #16a34a, #7c3aed).
 
-  --color-primary: #2563eb;
-  --color-primary-hover: #1d4ed8;
-  --color-primary-soft: #eaf1ff;
+   Hiérarchie assumée : UNE dominante (le bleu), UN accent (l'orange, qui sert
+   aussi d'avertissement — deux oranges qui cohabitent n'apporteraient rien),
+   des neutres teintés d'ardoise, et deux couleurs strictement sémantiques
+   (vert = terminé/en ligne, rouge = direct/destructif). Le violet des badges
+   "administrateur" disparaît : il n'appartenait à aucune identité, c'était une
+   cinquième couleur décorative de plus.
+
+   Les neutres ne sont pas des gris purs mais des gris bleutés dérivés de
+   l'ardoise du logo — c'est ce qui empêche l'ensemble de retomber sur le gris
+   neutre générique de n'importe quel tableau de bord. */
+:root {
+  --color-bg: #f2f5f7;
+  --color-surface: #ffffff;
+  --color-border: #dde4e8;
+  --color-text: #1c3a47;
+  --color-text-muted: #5e7885;
+
+  --color-primary: #046fb7;
+  --color-primary-hover: #005a96;
+  --color-primary-soft: #e4f0f8;
   --color-primary-text: #ffffff;
 
-  --color-danger: #dc2626;
-  --color-danger-bg: #fee2e2;
+  --color-accent: #e28423;
+  --color-accent-soft: #fcefdd;
 
-  --color-success: #16a34a;
-  --color-success-bg: #dcfce7;
-  --color-warning: #d97706;
-  --color-warning-bg: #fef3c7;
+  --color-danger: #c0271c;
+  --color-danger-bg: #fbe7e5;
 
-  --color-status-scheduled-bg: #eaf1ff;
-  --color-status-scheduled-text: #2563eb;
-  --color-status-live-bg: #fee2e2;
-  --color-status-live-text: #dc2626;
-  --color-status-ended-bg: #dcfce7;
-  --color-status-ended-text: #15803d;
+  --color-success: #179f47;
+  --color-success-bg: #e2f5e8;
+  /* Même orange que l'accent : un avertissement EST un signal d'attention, lui
+     donner une teinte propre ne ferait qu'ajouter une couleur au décompte. */
+  --color-warning: #e28423;
+  --color-warning-bg: #fcefdd;
 
-  --color-role-admin-bg: #ede9fe;
-  --color-role-admin-text: #6d28d9;
-  --color-role-moderator-bg: #eaf1ff;
-  --color-role-moderator-text: #2563eb;
-  --color-role-viewer-bg: #f1f2f4;
-  --color-role-viewer-text: #4b5563;
+  --color-status-scheduled-bg: #e4f0f8;
+  --color-status-scheduled-text: #046fb7;
+  --color-status-live-bg: #fbe7e5;
+  --color-status-live-text: #c0271c;
+  --color-status-ended-bg: #e2f5e8;
+  --color-status-ended-text: #127c38;
+
+  --color-role-admin-bg: #e6ebee;
+  --color-role-admin-text: #274958;
+  --color-role-moderator-bg: #e4f0f8;
+  --color-role-moderator-text: #046fb7;
+  --color-role-viewer-bg: #eef1f3;
+  --color-role-viewer-text: #5e7885;
 
   --radius: 12px;
-  --shadow: 0 1px 2px rgba(16, 24, 40, 0.05), 0 1px 3px rgba(16, 24, 40, 0.08);
+  --shadow: 0 1px 2px rgba(39, 73, 88, 0.06), 0 1px 3px rgba(39, 73, 88, 0.09);
+
+  /* Titres : Archivo à chasse réduite, qui reprend le lettrage condensé du
+     logo. Corps : Public Sans, dessinée pour les services publics et pourvue de
+     vrais chiffres tabulaires — indispensable pour des durées et des compteurs
+     qui se mettent à jour chaque seconde sans faire sauter la mise en page. */
+  --font-display: "Archivo Variable", "Archivo", system-ui, sans-serif;
+  --font-body: "Public Sans Variable", "Public Sans", system-ui, sans-serif;
 }
 
 :root[data-theme="dark"] {
-  --color-bg: #0d0f13;
-  --color-surface: #171a21;
-  --color-border: #272c37;
-  --color-text: #e6e8ec;
-  --color-text-muted: #8b93a3;
+  --color-bg: #0c1418;
+  --color-surface: #14222a;
+  --color-border: #24373f;
+  --color-text: #e3eaee;
+  --color-text-muted: #8aa3ae;
 
-  --color-primary: #3b82f6;
-  --color-primary-hover: #2563eb;
-  --color-primary-soft: rgba(59, 130, 246, 0.16);
+  /* Le bleu du logo n'a pas assez de luminosité pour tenir sur un fond sombre :
+     même teinte, éclaircie, plutôt qu'un bleu d'une autre famille. */
+  --color-primary: #3f9fdc;
+  --color-primary-hover: #5cb0e5;
+  --color-primary-soft: rgba(63, 159, 220, 0.16);
 
-  --color-danger-bg: rgba(220, 38, 38, 0.16);
+  --color-accent: #f0a04f;
+  --color-accent-soft: rgba(226, 132, 35, 0.18);
 
-  --color-success: #4ade80;
-  --color-success-bg: rgba(21, 128, 61, 0.2);
-  --color-warning: #fbbf24;
-  --color-warning-bg: rgba(217, 119, 6, 0.18);
+  --color-danger: #e8594c;
+  --color-danger-bg: rgba(192, 39, 28, 0.18);
 
-  --color-status-scheduled-bg: rgba(59, 130, 246, 0.16);
-  --color-status-live-bg: rgba(220, 38, 38, 0.18);
-  --color-status-ended-bg: rgba(21, 128, 61, 0.2);
+  --color-success: #3fc46f;
+  --color-success-bg: rgba(23, 159, 71, 0.2);
+  --color-warning: #f0a04f;
+  --color-warning-bg: rgba(226, 132, 35, 0.18);
 
-  --color-role-admin-bg: rgba(124, 58, 237, 0.18);
-  --color-role-admin-text: #a78bfa;
-  --color-role-moderator-bg: rgba(59, 130, 246, 0.16);
-  --color-role-moderator-text: #93c5fd;
-  --color-role-viewer-bg: rgba(139, 147, 163, 0.16);
-  --color-role-viewer-text: #b8bfcc;
+  --color-status-scheduled-bg: rgba(63, 159, 220, 0.16);
+  --color-status-scheduled-text: #7cc0e8;
+  --color-status-live-bg: rgba(192, 39, 28, 0.2);
+  --color-status-live-text: #e8594c;
+  --color-status-ended-bg: rgba(23, 159, 71, 0.2);
+  --color-status-ended-text: #3fc46f;
 
-  --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 1px 3px rgba(0, 0, 0, 0.35);
+  --color-role-admin-bg: rgba(138, 163, 174, 0.18);
+  --color-role-admin-text: #b6c7cf;
+  --color-role-moderator-bg: rgba(63, 159, 220, 0.16);
+  --color-role-moderator-text: #7cc0e8;
+  --color-role-viewer-bg: rgba(138, 163, 174, 0.14);
+  --color-role-viewer-text: #9db1ba;
+
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.32), 0 1px 3px rgba(0, 0, 0, 0.38);
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --color-bg: #0d0f13;
-    --color-surface: #171a21;
-    --color-border: #272c37;
-    --color-text: #e6e8ec;
-    --color-text-muted: #8b93a3;
-    --color-primary: #3b82f6;
-    --color-primary-hover: #2563eb;
-    --color-primary-soft: rgba(59, 130, 246, 0.16);
-    --color-danger-bg: rgba(220, 38, 38, 0.16);
-    --color-success: #4ade80;
-    --color-success-bg: rgba(21, 128, 61, 0.2);
-    --color-warning: #fbbf24;
-    --color-warning-bg: rgba(217, 119, 6, 0.18);
-    --color-status-scheduled-bg: rgba(59, 130, 246, 0.16);
-    --color-status-live-bg: rgba(220, 38, 38, 0.18);
-    --color-status-ended-bg: rgba(21, 128, 61, 0.2);
-    --color-role-admin-bg: rgba(124, 58, 237, 0.18);
-    --color-role-admin-text: #a78bfa;
-    --color-role-moderator-bg: rgba(59, 130, 246, 0.16);
-    --color-role-moderator-text: #93c5fd;
-    --color-role-viewer-bg: rgba(139, 147, 163, 0.16);
-    --color-role-viewer-text: #b8bfcc;
-    --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 1px 3px rgba(0, 0, 0, 0.35);
+    --color-bg: #0c1418;
+    --color-surface: #14222a;
+    --color-border: #24373f;
+    --color-text: #e3eaee;
+    --color-text-muted: #8aa3ae;
+    --color-primary: #3f9fdc;
+    --color-primary-hover: #5cb0e5;
+    --color-primary-soft: rgba(63, 159, 220, 0.16);
+    --color-accent: #f0a04f;
+    --color-accent-soft: rgba(226, 132, 35, 0.18);
+    --color-danger: #e8594c;
+    --color-danger-bg: rgba(192, 39, 28, 0.18);
+    --color-success: #3fc46f;
+    --color-success-bg: rgba(23, 159, 71, 0.2);
+    --color-warning: #f0a04f;
+    --color-warning-bg: rgba(226, 132, 35, 0.18);
+    --color-status-scheduled-bg: rgba(63, 159, 220, 0.16);
+    --color-status-scheduled-text: #7cc0e8;
+    --color-status-live-bg: rgba(192, 39, 28, 0.2);
+    --color-status-live-text: #e8594c;
+    --color-status-ended-bg: rgba(23, 159, 71, 0.2);
+    --color-status-ended-text: #3fc46f;
+    --color-role-admin-bg: rgba(138, 163, 174, 0.18);
+    --color-role-admin-text: #b6c7cf;
+    --color-role-moderator-bg: rgba(63, 159, 220, 0.16);
+    --color-role-moderator-text: #7cc0e8;
+    --color-role-viewer-bg: rgba(138, 163, 174, 0.14);
+    --color-role-viewer-text: #9db1ba;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.32), 0 1px 3px rgba(0, 0, 0, 0.38);
   }
 }
 
@@ -108,9 +151,61 @@ body,
 
 body {
   margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-family: var(--font-body);
   background: var(--color-bg);
   color: var(--color-text);
+  /* Public Sans a de vraies alternatives contextuelles ; sans ces réglages, le
+     navigateur n'active que les ligatures de base. */
+  font-feature-settings: "kern" 1, "liga" 1;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Typographie ──────────────────────────────────────────────────────────────
+   Deux familles, deux rôles, jamais mélangés : Archivo (chasse resserrée,
+   graisse haute) pour tout ce qui titre ou étiquette, Public Sans pour tout ce
+   qui se lit en continu. C'est le contraste entre les deux qui donne la
+   hiérarchie — pas trois tailles de police à deux pixels d'écart. */
+h1,
+h2,
+h3,
+h4 {
+  font-family: var(--font-display);
+  font-stretch: 92%;
+  letter-spacing: -0.015em;
+  line-height: 1.15;
+}
+h1 {
+  font-weight: 800;
+}
+h2,
+h3,
+h4 {
+  font-weight: 700;
+}
+
+/* Chiffres tabulaires sur TOUT ce qui est donnée : un compteur de participants
+   ou un chronomètre qui change chaque seconde ne doit pas faire danser la mise
+   en page parce qu'un 1 est plus étroit qu'un 8. */
+.stat-value,
+.engagement-stat-value,
+.activity-chart-value,
+.attendance-duration,
+.call-participant-count,
+.status-metric-value,
+table td,
+time {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Étiquettes en capitales : sans interlettrage, une suite de capitales se lit
+   comme un bloc compact et illisible aux petites tailles. */
+.stat-label,
+.engagement-stat-label,
+.status-metric-label,
+.engagement-table th,
+.panel-header h3 {
+  font-family: var(--font-display);
+  letter-spacing: 0.04em;
 }
 
 /* ── Boutons & primitives partagées ── */
@@ -793,11 +888,20 @@ button.stat-card:hover {
   /* La salle est TOUJOURS en thème sombre, indépendamment du réglage clair/
      sombre du tableau de bord (data-theme sur <html>). Sans ce recouvrement,
      var(--color-primary-soft) etc. reprenaient les valeurs très claires du
-     thème clair (#eaf1ff) et rendaient le texte blanc illisible sur fond
-     quasi-blanc (bulle "Vous" du chat, notamment). */
-  --color-primary: #3b82f6;
-  --color-primary-hover: #2563eb;
-  --color-primary-soft: rgba(59, 130, 246, 0.16);
+     thème clair et rendaient le texte blanc illisible sur fond quasi-blanc
+     (bulle "Vous" du chat, notamment).
+     Les couleurs sémantiques y figurent aussi depuis que les pastilles d'état
+     (enregistrement en cours, démarrage) passent par des jetons plutôt que par
+     des valeurs littérales : sans elles, la couleur du point "REC" dépendrait
+     du thème choisi pour le TABLEAU DE BORD, ce qui n'a aucun sens dans une
+     salle qui est sombre en permanence. */
+  --color-primary: #3f9fdc;
+  --color-primary-hover: #5cb0e5;
+  --color-primary-soft: rgba(63, 159, 220, 0.16);
+  --color-accent: #f0a04f;
+  --color-warning: #f0a04f;
+  --color-danger: #e8594c;
+  --color-success: #3fc46f;
 }
 
 /* Rail d'icônes — accès direct aux fonctionnalités de la salle, remplace
@@ -1160,17 +1264,17 @@ button.stat-card:hover {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #dc2626;
+  background: var(--color-danger);
   animation: pulse 1.5s ease-in-out infinite;
 }
 /* STARTING : point orange plutôt que rouge — rien n'est encore filmé, le rouge
    "REC" est réservé à la capture réellement active. */
 .recording-status-starting {
-  background: rgba(217, 119, 6, 0.16);
-  border-color: rgba(217, 119, 6, 0.4);
+  background: rgba(226, 132, 35, 0.16);
+  border-color: rgba(226, 132, 35, 0.4);
 }
 .recording-status-starting .recording-dot {
-  background: #d97706;
+  background: var(--color-accent);
 }
 .recording-timer {
   font-variant-numeric: tabular-nums;
@@ -1526,14 +1630,14 @@ button.stat-card:hover {
   margin: 0 0 3px;
 }
 .attendance-moderator-icon {
-  color: #d97706;
+  color: var(--color-accent);
   flex-shrink: 0;
 }
 .attendance-live-dot {
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: #dc2626;
+  background: var(--color-danger);
   animation: pulse 1.5s ease-in-out infinite;
 }
 .attendance-sub {
