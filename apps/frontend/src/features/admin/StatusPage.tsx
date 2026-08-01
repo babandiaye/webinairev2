@@ -17,6 +17,10 @@ const DETAIL_LABELS: Record<string, string> = {
   memoryBytes: "Mémoire",
   total: "Total reçus",
   lastReceivedAt: "Dernier reçu",
+  capacity: "Capacité",
+  usedBytes: "Utilisé",
+  quotaBytes: "Quota",
+  usedPercent: "Occupation",
 };
 
 function formatBytes(bytes: number): string {
@@ -34,7 +38,10 @@ function formatRelativeTime(iso: string): string {
 }
 
 function formatDetailValue(key: string, value: number | string): string {
-  if (key === "memoryBytes") return formatBytes(Number(value));
+  if (key === "memoryBytes" || key === "usedBytes" || key === "quotaBytes") {
+    return formatBytes(Number(value));
+  }
+  if (key === "usedPercent") return `${value} %`;
   if (key === "lastReceivedAt") return value === "never" ? "jamais" : formatRelativeTime(String(value));
   return String(value);
 }

@@ -1,5 +1,7 @@
 import * as os from "os";
 import { Injectable } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
+import { RecordingStatus } from "@prisma/client";
 import Redis from "ioredis";
 import { StatusComponentDto, SystemStatusDto, ComponentHealth } from "@webinairev2/shared-types";
 import { PrismaService } from "../prisma/prisma.service";
@@ -23,17 +25,19 @@ export class StatusService {
     private readonly prisma: PrismaService,
     private readonly livekitClients: LiveKitClientsService,
     private readonly s3: S3Service,
-    private readonly webhookHealth: WebhookHealthService
+    private readonly webhookHealth: WebhookHealthService,
+    private readonly config: ConfigService
   ) {}
 
   async getStatus(): Promise<SystemStatusDto> {
-    const [livekit, egress, ingress, postgresql, redis, minio] = await Promise.all([
+    const [livekit, egress, ingress, postgresql, redis, minio, storage] = await Promise.all([
       this.checkLiveKit(),
       this.checkEgress(),
       this.checkIngress(),
       this.checkPostgresql(),
       this.checkRedis(),
       this.checkMinio(),
+      this.checkStorage(),
     ]);
 
     const components: StatusComponentDto[] = [
@@ -43,6 +47,7 @@ export class StatusService {
       postgresql,
       redis,
       minio,
+      storage,
       this.checkWebhook(),
     ];
 
@@ -83,7 +88,14 @@ export class StatusService {
   private checkEgress(): Promise<StatusComponentDto> {
     return this.timed("egress", "Egress", async () => {
       const active = await this.livekitClients.egressClient.listEgress({ active: true });
-      return { status: "up" as ComponentHealth, details: { active: active.length } };
+      // Le plafond appliqué par RecordingsService.assertCapacityAvailable() est
+      // affiché ici : un administrateur qui reçoit "capacité atteinte" doit
+      // pouvoir vérifier d'un coup d'œil combien de captures tournent vraiment.
+      const max = this.config.get<number>("recordings.maxConcurrent")!;
+      return {
+        status: (active.length >= max ? "degraded" : "up") as ComponentHealth,
+        details: { active: active.length, capacity: max },
+      };
     });
   }
 
@@ -128,6 +140,43 @@ export class StatusService {
     return this.timed("minio", "MinIO", async () => {
       await this.s3.checkReachable();
       return { status: "up" as ComponentHealth };
+    });
+  }
+
+  // Un HeadBucket dit "MinIO répond", jamais "il reste de la place" — le tableau
+  // resterait donc vert avec un volume plein, alors qu'une saturation fait échouer
+  // l'egress À L'ÉCRITURE FINALE : c'est l'enregistrement ENTIER qui est perdu, pas
+  // seulement sa fin. D'où ce composant distinct.
+  //
+  // Ce qui est mesuré : la somme des tailles rapportées par l'egress pour les
+  // enregistrements finalisés. C'est ce qui grossit vraiment (~1 Go/h), et c'est
+  // exactement l'assiette sur laquelle porte la rétention. Ce n'est PAS l'espace
+  // libre réel du volume : MinIO tourne sur un hôte distant (S3_ENDPOINT), le
+  // backend n'a aucun moyen de lire son df. Le plafond est donc déclaré
+  // (RECORDINGS_QUOTA_GB) et doit être tenu à jour si le volume change.
+  private checkStorage(): Promise<StatusComponentDto> {
+    return this.timed("storage", "Stockage enregistrements", async () => {
+      const quotaBytes = this.config.get<number>("recordings.quotaBytes")!;
+      const aggregate = await this.prisma.recording.aggregate({
+        _sum: { size: true },
+        where: { status: RecordingStatus.READY },
+      });
+      // BigInt : Number est sûr ici (2^53 octets = 9 Po, hors de portée).
+      const usedBytes = Number(aggregate._sum.size ?? 0n);
+      const ratio = usedBytes / quotaBytes;
+
+      // 80 % laisse encore de quoi encaisser une journée de cours avant la
+      // saturation ; 95 % signifie qu'un seul enregistrement de 2 h peut déjà ne
+      // pas tenir, ce qui est un incident, pas un avertissement.
+      const status: ComponentHealth = ratio >= 0.95 ? "down" : ratio >= 0.8 ? "degraded" : "up";
+      return {
+        status,
+        details: {
+          usedBytes,
+          quotaBytes,
+          usedPercent: Math.round(ratio * 100),
+        },
+      };
     });
   }
 

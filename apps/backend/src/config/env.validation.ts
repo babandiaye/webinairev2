@@ -22,6 +22,16 @@ const envSchema = z.object({
   DOWNLOAD_LINK_SECRET: z.string().min(16),
   MOODLE_API_KEY: z.string().min(16),
   BACKEND_PORT: z.coerce.number().default(3000),
+  // Chaque enregistrement est un Chrome headless complet côté Egress (Web Egress,
+  // shm_size 1 Go) : la capacité réelle du nœud se compte en unités, pas en
+  // dizaines. Défaut volontairement bas — mieux vaut refuser un 4e enregistrement
+  // avec un message clair que d'en faire échouer trois déjà en cours.
+  MAX_CONCURRENT_RECORDINGS: z.coerce.number().int().positive().default(3),
+  // Budget de stockage alloué aux enregistrements, en Go. Sert uniquement à
+  // alerter (page Statut) : MinIO est sur un hôte distant, le backend ne peut pas
+  // lire l'espace libre réel de son volume — c'est donc un plafond déclaré, à
+  // tenir à jour si le volume change.
+  RECORDINGS_QUOTA_GB: z.coerce.number().positive().default(50),
   NODE_ENV: z.string().default("development"),
 });
 

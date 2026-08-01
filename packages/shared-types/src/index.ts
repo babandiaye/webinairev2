@@ -263,7 +263,7 @@ export interface AttendanceSessionGroupDto {
 export type ComponentHealth = "up" | "degraded" | "down";
 
 export interface StatusComponentDto {
-  id: string; // "livekit" | "egress" | "ingress" | "postgresql" | "redis" | "minio" | "webhook"
+  id: string; // "livekit" | "egress" | "ingress" | "postgresql" | "redis" | "minio" | "storage" | "webhook"
   label: string;
   status: ComponentHealth;
   latencyMs?: number;

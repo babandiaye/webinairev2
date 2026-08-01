@@ -37,4 +37,8 @@ export default () => ({
   moodle: {
     apiKey: process.env.MOODLE_API_KEY!,
   },
+  recordings: {
+    maxConcurrent: parseInt(process.env.MAX_CONCURRENT_RECORDINGS ?? "3", 10),
+    quotaBytes: Math.round(parseFloat(process.env.RECORDINGS_QUOTA_GB ?? "50") * 1024 ** 3),
+  },
 });

@@ -1,4 +1,11 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  Logger,
+  NotFoundException,
+  ServiceUnavailableException,
+} from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { EncodedFileOutput, EncodedFileType, EncodingOptionsPreset } from "livekit-server-sdk";
 import { RecordingStatus, RoomStatus } from "@prisma/client";
@@ -36,6 +43,8 @@ function buildRecordingFilepath(roomName: string): string {
 
 @Injectable()
 export class RecordingsService {
+  private readonly logger = new Logger(RecordingsService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly livekitClients: LiveKitClientsService,
@@ -58,6 +67,8 @@ export class RecordingsService {
     if (active) {
       throw new BadRequestException("Un enregistrement est déjà en cours pour cette salle");
     }
+
+    await this.assertCapacityAvailable();
 
     const filepath = buildRecordingFilepath(room.roomName);
     const output = new EncodedFileOutput({
@@ -102,6 +113,39 @@ export class RecordingsService {
     });
 
     return this.toDto(recording);
+  }
+
+  // La contrainte "un enregistrement par salle" ne protège de rien à l'échelle du
+  // nœud : trois enseignants sur trois salles différentes lancent trois Chrome
+  // headless simultanés côté Egress. Au-delà de la capacité réelle, LiveKit
+  // n'oppose aucun refus — il accepte le job puis dégrade ou fait tomber les
+  // captures DÉJÀ en cours, et l'échec ne se découvre qu'après le cours. D'où ce
+  // plafond explicite, avec un message qui dit quoi faire.
+  private async assertCapacityAvailable(): Promise<void> {
+    const max = this.config.get<number>("recordings.maxConcurrent")!;
+
+    let active: number;
+    try {
+      // Autorité : ce qui tourne réellement côté Egress. Couvre aussi un job dont
+      // le webhook de fin s'est perdu, ou lancé hors de cette application — deux
+      // cas invisibles depuis notre seule base.
+      active = (await this.livekitClients.egressClient.listEgress({ active: true })).length;
+    } catch (e) {
+      // Egress injoignable : notre comptabilité vaut mieux que pas de plafond du
+      // tout. Si le service est vraiment down, startWebEgress échouera juste
+      // après de toute façon — on ne masque donc aucune panne en repliant ici.
+      this.logger.warn(`listEgress indisponible, repli sur la base : ${e}`);
+      active = await this.prisma.recording.count({
+        where: { status: { in: RECORDING_IN_PROGRESS_STATUSES } },
+      });
+    }
+
+    if (active >= max) {
+      throw new ServiceUnavailableException(
+        `Capacité d'enregistrement atteinte (${active}/${max} en cours sur le serveur). ` +
+          `Réessayez dans quelques minutes ou demandez à un collègue d'arrêter le sien.`
+      );
+    }
   }
 
   async stop(roomId: string): Promise<RecordingDto> {
