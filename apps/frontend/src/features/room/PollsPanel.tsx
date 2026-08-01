@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Plus, X } from "lucide-react";
-import { useDataChannel } from "@livekit/components-react";
+import { useRoomContext } from "@livekit/components-react";
+import { RoomEvent } from "livekit-client";
 import { PollDto } from "@webinairev2/shared-types";
 import { api } from "../../api/client";
 
@@ -29,10 +30,7 @@ export function PollsPanel({
   const [options, setOptions] = useState(["", ""]);
   const [multiple, setMultiple] = useState(false);
   const [busy, setBusy] = useState(false);
-
-  const { send } = useDataChannel(TOPIC, () => {
-    refresh();
-  });
+  const room = useRoomContext();
 
   function refresh() {
     api.listPolls(roomId).then(setPolls).catch(() => {});
@@ -45,8 +43,29 @@ export function PollsPanel({
     return () => clearInterval(interval);
   }, [open, roomId]);
 
+  // room.on direct plutôt que useDataChannel(TOPIC, callbackEnLigne) : ce
+  // hook réabonne room.on(DataReceived) dès que la référence du callback
+  // change, et une fonction fléchée déclarée dans le corps du composant en
+  // est une nouvelle À CHAQUE rendu — tout message reçu pendant la fenêtre de
+  // réabonnement est perdu pour de bon (même en `reliable: true`, qui ne
+  // protège que le transport, pas la présence d'un auditeur JS au bon
+  // moment). Défaut découvert sur le tableau blanc (voir Whiteboard.tsx pour
+  // le détail complet), reproduit ici à l'identique et corrigé de même — même
+  // si l'impact y est moindre : le sondage a déjà un secours (l'intervalle de
+  // 4 s ci-dessus), donc un message manqué ne fait qu'ajouter jusqu'à 4 s de
+  // retard plutôt que désynchroniser durablement.
+  useEffect(() => {
+    function handleData(_payload: Uint8Array, _participant: unknown, _kind: unknown, topic?: string) {
+      if (topic === TOPIC) refresh();
+    }
+    room.on(RoomEvent.DataReceived, handleData);
+    return () => {
+      room.off(RoomEvent.DataReceived, handleData);
+    };
+  }, [room, roomId]);
+
   function notifyOthers() {
-    send(new TextEncoder().encode("updated"), { reliable: true });
+    room.localParticipant.publishData(new TextEncoder().encode("updated"), { reliable: true, topic: TOPIC });
   }
 
   async function handleCreate() {

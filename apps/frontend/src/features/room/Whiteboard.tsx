@@ -4,7 +4,8 @@ import { Excalidraw, reconcileElements, CaptureUpdateAction } from "@excalidraw/
 import type { ExcalidrawImperativeAPI } from "@excalidraw/excalidraw/types";
 import type { RemoteExcalidrawElement } from "@excalidraw/excalidraw/data/reconcile";
 import type { OrderedExcalidrawElement } from "@excalidraw/excalidraw/element/types";
-import { useDataChannel, useRoomContext } from "@livekit/components-react";
+import { useRoomContext } from "@livekit/components-react";
+import type { RemoteParticipant } from "livekit-client";
 import { RoomEvent } from "livekit-client";
 import "@excalidraw/excalidraw/index.css";
 import { api } from "../../api/client";
@@ -14,6 +15,15 @@ const CONTROL_TOPIC = "wb-control";
 const BROADCAST_DEBOUNCE_MS = 300;
 const SAVE_DEBOUNCE_MS = 3000;
 const POLL_INTERVAL_MS = 4000;
+// Filet de rattrapage périodique pour un SPECTATEUR (jamais le modérateur, qui
+// est la source de vérité de son propre trait) : recharge l'instantané serveur
+// et le RÉCONCILIE (jamais un remplacement brutal) avec la scène locale. Sans
+// ce filet, un seul delta perdu — coupure de quelques centaines de ms, paquet
+// arrivé pendant une brève réabonnement — désynchronise le spectateur jusqu'à
+// ce qu'il ferme et rouvre le panneau. 8 s : assez court pour une réparation
+// perçue comme immédiate, assez long pour ne pas doubler la charge du sondage
+// d'état déjà en place (POLL_INTERVAL_MS, actif même panneau fermé).
+const RESYNC_INTERVAL_MS = 8000;
 
 // Session partagée : ouverte/fermée pour tout le monde à la fois, pas un simple
 // panneau d'affichage local — sinon les autres participants ne voient jamais le
@@ -28,8 +38,9 @@ export function Whiteboard({ roomId, canManage }: { roomId: string; canManage: b
   // n'envoyer que le delta (élément créé/modifié/supprimé) plutôt que la scène
   // complète à chaque frappe. Sans ça, une scène de quelques dizaines de traits
   // dépasse vite la limite ~15 Kio d'un paquet de données LiveKit fiable, et
-  // sendDraw échoue silencieusement (pas de retour d'erreur exploité) — les
-  // autres participants restent alors figés sur un état obsolète.
+  // l'envoi échoue (voir le .catch de publishData plus bas, qui journalise
+  // mais ne remonte rien à l'écran) — les autres participants restent alors
+  // figés sur un état obsolète.
   const lastSentVersionsRef = useRef(new Map<string, number>());
   // Un spectateur (viewModeEnabled) suit par défaut le dessin du modérateur :
   // chaque delta reçu recadre sa caméra pour garder l'ensemble du dessin
@@ -58,42 +69,17 @@ export function Whiteboard({ roomId, canManage }: { roomId: string; canManage: b
   // un participant qui ne diffuse jamais ne peut pas rebroadcaster ce qu'il reçoit.
   const canBroadcast = canManage;
 
-  const { send: sendDraw } = useDataChannel(DRAW_TOPIC, (msg) => {
-    if (!excalidrawAPI) return;
-    const senderIsModerator = (() => {
-      try {
-        return msg.from?.metadata ? JSON.parse(msg.from.metadata).isModerator === true : false;
-      } catch {
-        return false;
-      }
-    })();
-    if (!senderIsModerator) return;
-
-    try {
-      const { elements } = JSON.parse(new TextDecoder().decode(msg.payload)) as {
-        elements: RemoteExcalidrawElement[];
-      };
-      const reconciled = reconcileElements(
-        excalidrawAPI.getSceneElements(),
-        elements,
-        excalidrawAPI.getAppState()
-      );
-      excalidrawAPI.updateScene({ elements: reconciled, captureUpdate: CaptureUpdateAction.NEVER });
-      // Recadrage continu pour un spectateur qui suit encore le dessin (voir
-      // followViewportRef) — jamais pour le modérateur, dont la caméra ne doit
-      // jamais être touchée automatiquement pendant qu'il dessine.
-      if (!canManage && followViewportRef.current && reconciled.length > 0) {
-        suppressDisengageUntilRef.current = Date.now() + 800;
-        excalidrawAPI.scrollToContent(reconciled, { fitToContent: true, animate: false });
-      }
-    } catch {
-      // message malformé ignoré
-    }
-  });
-
-  const { send: sendControl } = useDataChannel(CONTROL_TOPIC, () => {
-    refreshState();
-  });
+  // Refs relues DANS l'écouteur ci-dessous, jamais mises en dépendance de son
+  // effet — voir le commentaire complet sur cet effet pour l'incident que ça
+  // corrige (désabonnement/réabonnement du canal de données à chaque rendu,
+  // et tout paquet arrivé pendant la fenêtre de coupure perdu pour de bon,
+  // useDataChannel de @livekit/components-react réabonnant dès que la
+  // fonction "onMessage" change de référence — le cas ici à CHAQUE rendu,
+  // puisque les deux callbacks étaient déclarés en ligne).
+  const excalidrawAPIRef = useRef<ExcalidrawImperativeAPI | null>(null);
+  excalidrawAPIRef.current = excalidrawAPI;
+  const canManageRef = useRef(canManage);
+  canManageRef.current = canManage;
 
   function refreshState() {
     api.getWhiteboardState(roomId).then((s) => setOpen(s.open)).catch(() => {});
@@ -105,33 +91,54 @@ export function Whiteboard({ roomId, canManage }: { roomId: string; canManage: b
     return () => clearInterval(interval);
   }, [roomId]);
 
+  // RÉCONCILIE (jamais un remplacement brutal) l'instantané serveur avec la
+  // scène locale, au lieu d'un simple updateScene() qui écraserait tout. Ce
+  // n'est pas qu'une prudence théorique : un spectateur qui vient d'ouvrir le
+  // panneau a une requête loadSnapshot() EN VOL pendant que l'écouteur de
+  // deltas (déjà actif, lui, dès le montage) peut très bien recevoir un trait
+  // frais entre-temps — sans réconciliation, la réponse (plus lente, donc plus
+  // tardive à atterrir) écraserait ce trait tout juste reçu. reconcileElements
+  // compare les numéros de version et garde toujours le plus récent des deux
+  // côtés, quel que soit l'ordre d'arrivée — la même fonction qui protège déjà
+  // la réception normale des deltas protège donc aussi ce chemin.
   const loadSnapshot = useCallback(() => {
     if (!excalidrawAPI) return;
     api
       .getWhiteboard(roomId)
       .then((snapshot) => {
         const elements = (snapshot.sceneData as { elements?: OrderedExcalidrawElement[] } | null)?.elements;
-        if (elements) {
-          excalidrawAPI.updateScene({ elements, captureUpdate: CaptureUpdateAction.NEVER });
-          lastSentVersionsRef.current = new Map(elements.map((el) => [el.id, el.version]));
-          // Sans ça, la caméra (zoom/défilement) de ce client reste à sa position
-          // par défaut au chargement — sans rapport avec l'endroit où le dessin
-          // existant se trouve réellement sur le canevas infini. Symptôme observé :
-          // un participant qui ouvre le tableau blanc en cours de session ne voit
-          // qu'un fragment minuscule et décentré de ce que le modérateur a dessiné.
-          // Pour le modérateur (qui rejoint une scène existante), toujours cadrer —
-          // sa caméra n'est de toute façon jamais recadrée ensuite. Pour un
-          // spectateur, seulement s'il suit encore le dessin (followViewportRef) :
-          // un resync réseau (RoomEvent.Reconnected) ne doit pas lui arracher la
-          // caméra s'il l'avait déjà déplacée avant la coupure.
-          if (elements.length > 0 && (canManage || followViewportRef.current)) {
-            suppressDisengageUntilRef.current = Date.now() + 800;
-            excalidrawAPI.scrollToContent(elements, { fitToContent: true, animate: false });
-          }
+        if (!elements) return;
+
+        const reconciled = reconcileElements(
+          excalidrawAPI.getSceneElements(),
+          elements as unknown as RemoteExcalidrawElement[],
+          excalidrawAPI.getAppState()
+        );
+        excalidrawAPI.updateScene({ elements: reconciled, captureUpdate: CaptureUpdateAction.NEVER });
+        lastSentVersionsRef.current = new Map(reconciled.map((el) => [el.id, el.version]));
+        // Sans ça, la caméra (zoom/défilement) de ce client reste à sa position
+        // par défaut au chargement — sans rapport avec l'endroit où le dessin
+        // existant se trouve réellement sur le canevas infini. Symptôme observé :
+        // un participant qui ouvre le tableau blanc en cours de session ne voit
+        // qu'un fragment minuscule et décentré de ce que le modérateur a dessiné.
+        // Pour le modérateur (qui rejoint une scène existante), toujours cadrer —
+        // sa caméra n'est de toute façon jamais recadrée ensuite. Pour un
+        // spectateur, seulement s'il suit encore le dessin (followViewportRef) :
+        // un resync (reconnexion réseau, ou filet périodique) ne doit pas lui
+        // arracher la caméra s'il l'avait déjà déplacée lui-même auparavant.
+        if (reconciled.length > 0 && (canManage || followViewportRef.current)) {
+          suppressDisengageUntilRef.current = Date.now() + 800;
+          excalidrawAPI.scrollToContent(reconciled, { fitToContent: true, animate: false });
         }
       })
       .catch(() => {});
   }, [excalidrawAPI, roomId, canManage]);
+
+  // Relu dans les écouteurs stables ci-dessous sans jamais les faire dépendre
+  // de loadSnapshot (dont l'identité change avec excalidrawAPI/canManage) —
+  // même raison que pour excalidrawAPIRef plus haut.
+  const loadSnapshotRef = useRef(loadSnapshot);
+  loadSnapshotRef.current = loadSnapshot;
 
   // Ne recharge l'instantané serveur qu'une seule fois par ouverture — sinon,
   // si excalidrawAPI change de référence pendant que quelqu'un écrit (Excalidraw
@@ -150,17 +157,101 @@ export function Whiteboard({ roomId, canManage }: { roomId: string; canManage: b
     loadSnapshot();
   }, [excalidrawAPI, open, loadSnapshot]);
 
-  // Filet de rattrapage après une coupure réseau (changement wifi/4G, mise en
-  // veille de l'onglet sur mobile) : la diffusion "reliable" est best-effort,
-  // un message manqué pendant la déconnexion ne sera jamais réémis — sans ce
-  // resync, le participant reste durablement désynchronisé sans le savoir.
+  // Écouteurs de données de la salle, CONSOLIDÉS en un seul abonnement dont la
+  // seule dépendance est `room` — un objet stable pour toute la durée de
+  // connexion (voir useRoomSignals.ts, même patron). C'est le correctif de
+  // l'instabilité rapportée ("le tableau blanc ne s'affiche plus côté
+  // participant") : useDataChannel(TOPIC, callbackEnLigne) de
+  // @livekit/components-react réabonne room.on(DataReceived) dès que la
+  // référence du callback change — et une fonction fléchée déclarée dans le
+  // corps du composant est UNE NOUVELLE référence à CHAQUE rendu. RoomPage
+  // porte beaucoup d'état (panneaux, micro coupé, etc.) qui redessine ses
+  // enfants souvent ; chaque rendu débranchait puis rebranchait l'écouteur, et
+  // tout trait arrivé pendant cette fenêtre (même envoyé en `reliable: true`,
+  // qui ne protège que le TRANSPORT, pas la présence d'un auditeur JS au bon
+  // moment) était perdu pour de bon — d'où un tableau blanc "parfois" vide,
+  // jamais franchement cassé, exactement le symptôme observé.
+  // RoomEvent.Reconnected est regroupé ici pour la même raison : il dépendait
+  // jusqu'ici de loadSnapshot, dont l'identité change avec excalidrawAPI/
+  // canManage — un point de churn supplémentaire, moindre mais de même nature.
   useEffect(() => {
-    if (!open) return;
-    room.on(RoomEvent.Reconnected, loadSnapshot);
+    function handleData(
+      payload: Uint8Array,
+      participant: RemoteParticipant | undefined,
+      _kind: unknown,
+      topic: string | undefined
+    ) {
+      if (topic === CONTROL_TOPIC) {
+        refreshState();
+        return;
+      }
+      if (topic !== DRAW_TOPIC) return;
+
+      const excalidrawAPI = excalidrawAPIRef.current;
+      if (!excalidrawAPI) return;
+
+      const senderIsModerator = (() => {
+        try {
+          return participant?.metadata ? JSON.parse(participant.metadata).isModerator === true : false;
+        } catch {
+          return false;
+        }
+      })();
+      if (!senderIsModerator) return;
+
+      try {
+        const { elements } = JSON.parse(new TextDecoder().decode(payload)) as {
+          elements: RemoteExcalidrawElement[];
+        };
+        const reconciled = reconcileElements(
+          excalidrawAPI.getSceneElements(),
+          elements,
+          excalidrawAPI.getAppState()
+        );
+        excalidrawAPI.updateScene({ elements: reconciled, captureUpdate: CaptureUpdateAction.NEVER });
+        // Recadrage continu pour un spectateur qui suit encore le dessin (voir
+        // followViewportRef) — jamais pour le modérateur, dont la caméra ne
+        // doit jamais être touchée automatiquement pendant qu'il dessine.
+        if (!canManageRef.current && followViewportRef.current && reconciled.length > 0) {
+          suppressDisengageUntilRef.current = Date.now() + 800;
+          excalidrawAPI.scrollToContent(reconciled, { fitToContent: true, animate: false });
+        }
+      } catch {
+        // message malformé ignoré
+      }
+    }
+
+    // Filet de rattrapage après une coupure réseau (changement wifi/4G, mise
+    // en veille de l'onglet sur mobile) : la diffusion "reliable" retransmet
+    // au niveau transport mais ne survit pas à une reconnexion complète — un
+    // message émis pendant que ce client était injoignable ne sera jamais
+    // réémis, d'où ce resync explicite sur le retour de connexion.
+    function handleReconnected() {
+      loadSnapshotRef.current();
+    }
+
+    room.on(RoomEvent.DataReceived, handleData);
+    room.on(RoomEvent.Reconnected, handleReconnected);
     return () => {
-      room.off(RoomEvent.Reconnected, loadSnapshot);
+      room.off(RoomEvent.DataReceived, handleData);
+      room.off(RoomEvent.Reconnected, handleReconnected);
     };
-  }, [room, open, loadSnapshot]);
+  }, [room]);
+
+  // Filet PÉRIODIQUE, en plus de la reconnexion ci-dessus : celle-ci ne
+  // couvre qu'une coupure réseau franche (RoomEvent.Reconnected), pas un
+  // delta isolé perdu alors que la connexion reste apparemment saine (fenêtre
+  // de réabonnement d'un composant voisin, perte ponctuelle côté SFU...). Un
+  // spectateur ainsi désynchronisé n'a aujourd'hui aucun moyen de le savoir —
+  // ce filet le répare de lui-même en quelques secondes, sans action de sa
+  // part. Jamais pour le modérateur : sa scène locale EST la vérité qu'il
+  // diffuse, un resync purement décoratif ne ferait qu'ajouter de la charge
+  // sans rien réparer.
+  useEffect(() => {
+    if (!open || canManage) return;
+    const interval = setInterval(() => loadSnapshotRef.current(), RESYNC_INTERVAL_MS);
+    return () => clearInterval(interval);
+  }, [open, canManage]);
 
   // Désactive le pinch-zoom NATIF du navigateur tant que le tableau blanc est
   // ouvert (restauré à la fermeture) — Excalidraw a son propre zoom/pan
@@ -210,17 +301,24 @@ export function Whiteboard({ roomId, canManage }: { roomId: string; canManage: b
         if (changed.length === 0) return;
         for (const el of changed) lastSentVersionsRef.current.set(el.id, el.version);
 
-        sendDraw(new TextEncoder().encode(JSON.stringify({ elements: changed })), { reliable: true }).catch(
-          (e: unknown) => {
+        // Envoi direct via room.localParticipant plutôt que le `send` fourni
+        // par useDataChannel — supprimé avec le hook lui-même (voir l'effet
+        // d'abonnement consolidé plus haut) : aucune raison de le réintroduire
+        // seulement pour l'émission, `room` étant de toute façon déjà stable.
+        room.localParticipant
+          .publishData(new TextEncoder().encode(JSON.stringify({ elements: changed })), {
+            reliable: true,
+            topic: DRAW_TOPIC,
+          })
+          .catch((e: unknown) => {
             // Le message le plus probable : paquet > limite du data channel
             // LiveKit — les autres participants resteront désynchronisés tant
             // que ce n'est pas visible. Loggé plutôt qu'avalé silencieusement.
             console.warn("Diffusion du tableau blanc échouée", e);
-          }
-        );
+          });
       }, BROADCAST_DEBOUNCE_MS);
     },
-    [roomId, sendDraw, canBroadcast]
+    [roomId, room, canBroadcast]
   );
 
   useEffect(
@@ -245,7 +343,10 @@ export function Whiteboard({ roomId, canManage }: { roomId: string; canManage: b
     try {
       await api.setWhiteboardState(roomId, { open: false });
       setOpen(false);
-      sendControl(new TextEncoder().encode("closed"), { reliable: true });
+      room.localParticipant.publishData(new TextEncoder().encode("closed"), {
+        reliable: true,
+        topic: CONTROL_TOPIC,
+      });
     } catch {
       // le prochain sondage périodique rattrapera l'état si l'appel échoue
     }

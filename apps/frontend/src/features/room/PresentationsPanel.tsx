@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, Upload, X } from "lucide-react";
-import { useDataChannel } from "@livekit/components-react";
+import { useRoomContext } from "@livekit/components-react";
+import { RoomEvent } from "livekit-client";
 import { PresentationDto } from "@webinairev2/shared-types";
 import { api, API_URL } from "../../api/client";
 
@@ -28,10 +29,7 @@ export function PresentationsPanel({
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const { send } = useDataChannel(TOPIC, () => {
-    refreshActive();
-  });
+  const room = useRoomContext();
 
   function refreshList() {
     api.listPresentations(roomId).then(setPresentations).catch(() => {});
@@ -60,8 +58,28 @@ export function PresentationsPanel({
     return () => clearInterval(interval);
   }, [open, roomId]);
 
+  // room.on direct plutôt que useDataChannel(TOPIC, callbackEnLigne) : ce hook
+  // réabonne room.on(DataReceived) dès que la référence du callback change, et
+  // une fonction fléchée déclarée dans le corps du composant en est une
+  // nouvelle À CHAQUE rendu — tout message reçu pendant la fenêtre de
+  // réabonnement est perdu pour de bon. Défaut découvert sur le tableau blanc
+  // (voir Whiteboard.tsx pour le détail complet), reproduit ici à l'identique
+  // et corrigé de même — même si l'impact y est moindre : la diapo active a
+  // déjà un secours (l'intervalle de 5 s ci-dessus, actif même panneau
+  // fermé), donc un message manqué ne fait qu'ajouter jusqu'à 5 s de retard
+  // plutôt que désynchroniser durablement.
+  useEffect(() => {
+    function handleData(_payload: Uint8Array, _participant: unknown, _kind: unknown, topic?: string) {
+      if (topic === TOPIC) refreshActive();
+    }
+    room.on(RoomEvent.DataReceived, handleData);
+    return () => {
+      room.off(RoomEvent.DataReceived, handleData);
+    };
+  }, [room, roomId]);
+
   function notifyOthers() {
-    send(new TextEncoder().encode("updated"), { reliable: true });
+    room.localParticipant.publishData(new TextEncoder().encode("updated"), { reliable: true, topic: TOPIC });
   }
 
   async function handleUpload(file: File) {
