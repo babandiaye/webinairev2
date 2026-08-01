@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Post, UseGuards } from "@nestjs/common";
+import { Body, Controller, Delete, Get, Param, Post, Query, UseGuards } from "@nestjs/common";
 import { MoodleApiKeyGuard } from "./moodle-api-key.guard";
 import { MoodleService } from "./moodle.service";
 import { CreateMoodleRoomDto } from "./dto/create-moodle-room.dto";
@@ -22,9 +22,21 @@ export class MoodleController {
     return this.moodle.getStatus(roomId);
   }
 
+  // Réponse paginée { recordings, total, page, perPage } — le plugin Moodle
+  // (classes/api.php) accepte aussi l'ancienne forme "tableau nu" pour qu'une
+  // version antérieure du plugin, encore installée le temps d'un déploiement,
+  // ne casse pas.
   @Get("rooms/:roomId/recordings")
-  listRecordings(@Param("roomId") roomId: string) {
-    return this.moodle.listRecordings(roomId);
+  listRecordings(
+    @Param("roomId") roomId: string,
+    @Query("page") page?: string,
+    @Query("perPage") perPage?: string
+  ) {
+    return this.moodle.listRecordings(
+      roomId,
+      page ? Number(page) : undefined,
+      perPage ? Number(perPage) : undefined
+    );
   }
 
   @Delete("rooms/:roomId/recordings/:recordingId")

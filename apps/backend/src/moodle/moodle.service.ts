@@ -10,6 +10,7 @@ import { EnrollmentsService } from "../enrollments/enrollments.service";
 import { signDownloadToken } from "../common/download-token.util";
 import {
   MoodleRecordingDto,
+  MoodleRecordingPageDto,
   MoodleRoomDto,
   MoodleRoomStatusDto,
   MoodleUserSyncDto,
@@ -22,6 +23,12 @@ import { SyncMoodleUserDto } from "./dto/sync-moodle-user.dto";
 // l'utilisateur ne clique "Voir", contrairement à RecordingsPage.tsx qui régénère
 // le lien juste avant utilisation.
 const MOODLE_PLAY_LINK_TTL_SECONDS = 30 * 60;
+
+// Bornes de pagination — le plugin Moodle est le seul appelant, mais la valeur
+// vient d'un réglage d'administration côté Moodle : elle est traitée comme une
+// entrée non fiable (un perPage démesuré ferait signer autant de jetons HMAC).
+const RECORDINGS_DEFAULT_PER_PAGE = 10;
+const RECORDINGS_MAX_PER_PAGE = 100;
 
 @Injectable()
 export class MoodleService {
@@ -91,27 +98,48 @@ export class MoodleService {
     return { status: room.status, title: room.title };
   }
 
-  async listRecordings(roomId: string): Promise<MoodleRecordingDto[]> {
+  async listRecordings(roomId: string, page = 1, perPage = RECORDINGS_DEFAULT_PER_PAGE): Promise<MoodleRecordingPageDto> {
     const room = await this.prisma.room.findUnique({ where: { id: roomId } });
     if (!room) throw new NotFoundException("Salle introuvable");
 
-    const recordings = await this.prisma.recording.findMany({
-      where: { roomId, status: RecordingStatus.READY },
-      orderBy: { createdAt: "desc" },
-    });
+    const safePerPage = Math.min(Math.max(Math.trunc(perPage) || RECORDINGS_DEFAULT_PER_PAGE, 1), RECORDINGS_MAX_PER_PAGE);
+    const safePage = Math.max(Math.trunc(page) || 1, 1);
+    const where = { roomId, status: RecordingStatus.READY };
+
+    const [total, recordings] = await this.prisma.$transaction([
+      this.prisma.recording.count({ where }),
+      this.prisma.recording.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        skip: (safePage - 1) * safePerPage,
+        take: safePerPage,
+      }),
+    ]);
 
     const secret = this.config.get<string>("secrets.downloadLink")!;
-    return recordings.map((r) => {
-      const exp = Math.floor(Date.now() / 1000) + MOODLE_PLAY_LINK_TTL_SECONDS;
-      const token = signDownloadToken({ resourceId: r.id, exp }, secret);
-      return {
-        id: r.id,
-        name: r.filename,
-        date: r.createdAt.toISOString(),
-        duration: r.duration,
-        playUrl: `${this.config.get<string>("frontendUrl")}/api/recordings/download?token=${encodeURIComponent(token)}&inline=1`,
-      };
-    });
+    const frontendUrl = this.config.get<string>("frontendUrl")!;
+
+    return {
+      total,
+      page: safePage,
+      perPage: safePerPage,
+      recordings: recordings.map((r): MoodleRecordingDto => {
+        const exp = Math.floor(Date.now() / 1000) + MOODLE_PLAY_LINK_TTL_SECONDS;
+        const token = signDownloadToken({ resourceId: r.id, exp }, secret);
+        const base = `${frontendUrl}/api/recordings/download?token=${encodeURIComponent(token)}`;
+        return {
+          id: r.id,
+          name: r.filename,
+          date: r.createdAt.toISOString(),
+          duration: r.duration,
+          // BigInt n'est pas sérialisable en JSON — Number est exact jusqu'à
+          // 2^53 octets (9 Po), sans commune mesure avec un enregistrement.
+          sizeBytes: r.size === null ? null : Number(r.size),
+          playUrl: `${base}&inline=1`,
+          downloadUrl: base,
+        };
+      }),
+    };
   }
 
   async deleteRecording(roomId: string, recordingId: string): Promise<void> {

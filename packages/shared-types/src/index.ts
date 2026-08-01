@@ -264,7 +264,23 @@ export interface MoodleRecordingDto {
   name: string;
   date: string;
   duration: number | null;
+  sizeBytes: number | null;
+  // Même ressource, même jeton signé : `playUrl` porte `inline=1` (lecture dans
+  // un <video>), `downloadUrl` non (Content-Disposition: attachment). Voir
+  // RecordingsController.download.
   playUrl: string;
+  downloadUrl: string;
+}
+
+// Le plugin Moodle pagine côté serveur : une activité de cours peut accumuler
+// des dizaines d'enregistrements, et chaque entrée renvoyée coûte deux jetons
+// HMAC signés (lecture + téléchargement) qu'il serait inutile d'émettre pour
+// des lignes jamais affichées.
+export interface MoodleRecordingPageDto {
+  recordings: MoodleRecordingDto[];
+  total: number;
+  page: number;
+  perPage: number;
 }
 
 export interface MoodleUserSyncDto {
