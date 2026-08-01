@@ -6,6 +6,12 @@ partage de présentations, permissions façon BBB (parole/présentation accordé
 le modérateur), enregistrement et suivi de présence. Backend NestJS, frontend
 React/Vite, monorepo pnpm.
 
+S'y ajoutent : écran de pré-connexion (choix des périphériques, test d'écho avant
+d'entrer en séance), réactions éphémères et file de mains levées ordonnée, verrous
+d'interaction par salle (micro, caméra, discussion, réactions, liste des
+participants), inscription des étudiants à l'unité ou en masse par CSV, et un
+tableau de bord d'engagement exportable en CSV/PDF.
+
 Ce déploiement de référence est **natif** (systemd + nginx), sans conteneur pour
 l'application elle-même — seule l'infrastructure (PostgreSQL, Redis, LiveKit,
 S3/MinIO) peut être conteneurisée ou non, au choix.
@@ -26,9 +32,15 @@ docs/RUNBOOK.md          Détail du déploiement UNCHK (infra réutilisée, jalo
 - **Node.js 20** (LTS)
 - **pnpm 9** (`corepack enable`, le monorepo est pin sur `pnpm@9.15.0`)
 - **PostgreSQL** ≥ 14
-- **Redis** ≥ 6 (sessions HTTP uniquement — la conversion PDF→PNG des
-  présentations tourne de façon synchrone dans le process API, pas de file de
-  jobs nécessaire)
+- **Redis** ≥ 6 (sessions HTTP uniquement — pas de file de jobs nécessaire : la
+  conversion PDF→PNG des présentations délègue à `pdftoppm` dans un processus
+  système séparé, lancée sans attendre sa fin, avec suivi d'état en base et un
+  cron de réconciliation pour les conversions restées bloquées. Elle ne bloque
+  donc pas la boucle d'évènements Node, mais **aucune limite de concurrence**
+  n'est appliquée : N envois simultanés lancent N `pdftoppm`, en concurrence CPU
+  avec l'API et l'Egress)
+- **`pdftoppm`** (paquet `poppler-utils`) sur la machine du backend — requis par
+  la conversion des présentations PDF
 - **Stockage compatible S3** (MinIO ou AWS S3) avec un bucket dédié
 - **Serveur LiveKit** (SFU) avec **Egress** activé (nécessaire pour les
   enregistrements et les vues Web-Egress tableau blanc/présentation).
@@ -128,6 +140,15 @@ immédiat si une valeur manque) :
 | `MOODLE_API_KEY` | Clé partagée avec le plugin Moodle (auth `X-Api-Key`, voir plus bas) |
 | `BACKEND_PORT` | Port d'écoute du backend (défaut `3000`) |
 
+Variables **optionnelles**, toutes pourvues d'un défaut sûr — à ne renseigner que
+pour s'écarter du comportement par défaut :
+
+| Variable | Défaut | Rôle |
+|---|---|---|
+| `MAX_CONCURRENT_RECORDINGS` | `3` | Plafond de captures simultanées sur l'ensemble du serveur. Chaque enregistrement est un Chrome headless complet côté Egress : au-delà de la capacité réelle du nœud, LiveKit accepte le job puis dégrade les captures **déjà en cours**. Le plafond renvoie une erreur explicite plutôt que de laisser cette dégradation arriver. |
+| `RECORDINGS_QUOTA_GB` | `0` (désactivé) | Budget de stockage déclaré, uniquement pour l'alerte de la page Statut (80 % / 95 %). À `0`, le volume utilisé reste affiché sans verdict. Valeur **déclarée et non mesurée** : le stockage S3 pouvant être distant, le backend n'a aucun moyen de lire son espace libre réel. |
+| `RECORDINGS_RETENTION_DAYS` | `0` (désactivé) | Durée de conservation d'un enregistrement. À `0`, **aucune purge automatique** — défaut délibéré, un enregistrement étant souvent l'unique trace d'un cours. Une valeur > 0 active une purge nocturne (3 h) qui supprime l'objet S3 puis la ligne en base. |
+
 Le frontend a son propre fichier, lu **au build** par Vite (`VITE_*` uniquement) :
 
 ```bash
@@ -151,6 +172,12 @@ cd ../..
 ```bash
 pnpm build   # shared-types → backend → frontend, dans cet ordre (package.json racine)
 ```
+
+Les polices (Archivo, Public Sans) sont empaquetées par Vite via `@fontsource-*`,
+et non chargées depuis `fonts.googleapis.com` : l'application n'a **aucune
+dépendance réseau externe à l'exécution**, ce qui la rend utilisable derrière un
+réseau filtrant les CDN tiers. Elles sont en revanche récupérées à
+`pnpm install`, comme n'importe quelle dépendance.
 
 ### 6. Lancer le backend
 
