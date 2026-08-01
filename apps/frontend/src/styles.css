@@ -2776,3 +2776,178 @@ button.stat-card:hover {
   min-width: 210px;
   justify-content: center;
 }
+
+/* ── Tableau de bord d'engagement (EngagementPanel) ──────────────────────── */
+.engagement-panel {
+  width: min(780px, 94vw);
+}
+.engagement-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.btn-sm {
+  padding: 6px 10px;
+  font-size: 0.76rem;
+}
+.engagement-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.engagement-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: var(--radius);
+  padding: 11px 13px;
+}
+.engagement-stat-value {
+  font-size: 1.15rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.engagement-stat-label {
+  font-size: 0.72rem;
+  opacity: 0.6;
+}
+.engagement-table-wrap {
+  /* Le tableau défile dans son propre cadre : sans ça, sept colonnes sur un
+     écran étroit débordent le panneau et poussent la page entière. */
+  overflow-x: auto;
+  max-height: 46vh;
+  overflow-y: auto;
+}
+.engagement-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+}
+.engagement-table th {
+  position: sticky;
+  top: 0;
+  text-align: left;
+  font-weight: 600;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  opacity: 0.55;
+  padding: 7px 9px;
+  /* Opaque et identique au fond de .breakout-panel : un en-tête collant
+     semi-transparent laisserait défiler les lignes en transparence dessous. */
+  background: #111319;
+  white-space: nowrap;
+}
+.engagement-table td {
+  padding: 8px 9px;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.engagement-row-gone {
+  opacity: 0.45;
+}
+.engagement-name {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  white-space: normal;
+}
+.engagement-badge {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+}
+.engagement-talk {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 128px;
+}
+.engagement-bar-track {
+  flex: 1;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  overflow: hidden;
+}
+.engagement-bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--color-primary);
+}
+.engagement-state {
+  display: flex;
+  gap: 6px;
+  opacity: 0.7;
+}
+.engagement-note {
+  margin: 14px 0 0;
+  font-size: 0.73rem;
+  opacity: 0.55;
+  line-height: 1.5;
+}
+
+/* Version imprimable : cachée à l'écran, seule visible sur la feuille. */
+.engagement-print {
+  display: none;
+}
+@media print {
+  /* Portée volontairement limitée à .printing-engagement, posé sur <body> le
+     temps de l'impression du relevé (voir printReport) : appliquée globalement,
+     cette règle transformerait tout Ctrl+P depuis n'importe quelle page de
+     l'application en feuille blanche.
+     visibility plutôt que display : les ancêtres du bloc à imprimer doivent
+     rester dans le flux pour que leur enfant s'affiche, ce qu'un display:none
+     sur eux rendrait impossible. */
+  body.printing-engagement * {
+    visibility: hidden;
+  }
+  body.printing-engagement .engagement-print,
+  body.printing-engagement .engagement-print * {
+    visibility: visible;
+  }
+  body.printing-engagement .engagement-print {
+    display: block;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    padding: 0;
+    color: #000;
+    background: #fff;
+  }
+  .engagement-print h1 {
+    font-size: 1.1rem;
+    margin: 0 0 4px;
+  }
+  .engagement-print p {
+    font-size: 0.8rem;
+    margin: 0 0 14px;
+  }
+  .engagement-print table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.78rem;
+  }
+  .engagement-print th,
+  .engagement-print td {
+    border: 1px solid #999;
+    padding: 5px 7px;
+    text-align: left;
+  }
+  .engagement-print th {
+    background: #eee;
+  }
+  /* Une ligne coupée en deux entre deux pages est illisible sur un relevé
+     qu'un enseignant peut archiver. */
+  .engagement-print tr {
+    break-inside: avoid;
+  }
+}

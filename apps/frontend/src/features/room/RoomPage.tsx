@@ -19,6 +19,8 @@ import { CallSideNav, CallPanel } from "./CallSideNav";
 import { CallSettingsModal } from "./CallSettingsModal";
 import { EchoWarningBanner } from "./EchoWarningBanner";
 import { PreJoinScreen, DeviceSelection } from "./PreJoinScreen";
+import { EngagementProvider } from "./useEngagementStats";
+import { EngagementPanel } from "./EngagementPanel";
 import { BreakoutManagePanel } from "./BreakoutManagePanel";
 import { BreakoutAssignedBanner } from "./BreakoutAssignedBanner";
 import { BreakoutReturnBar } from "./BreakoutReturnBar";
@@ -256,6 +258,11 @@ export function RoomPage() {
         navigate("/");
       }}
     >
+      {/* Enveloppe tout le contenu de la salle : la collecte doit démarrer à
+          l'entrée en séance, pas à l'ouverture du panneau — sinon un animateur
+          qui le consulte à la 40e minute ne verrait rien des 40 premières.
+          Ne provoque aucun rendu de ses enfants (voir useEngagementStats). */}
+      <EngagementProvider enabled={canManage}>
       <CallSideNav
         canManage={canManage}
         isInBreakout={isInBreakout}
@@ -326,6 +333,13 @@ export function RoomPage() {
             open={activePanel === "presentations"}
             onClose={() => setActivePanel(null)}
           />
+          {canManage && (
+            <EngagementPanel
+              open={activePanel === "engagement"}
+              onClose={() => setActivePanel(null)}
+              roomTitle={activeConnection.room.title}
+            />
+          )}
         </div>
 
         <div className="call-controlbar-wrapper">
@@ -364,6 +378,7 @@ export function RoomPage() {
       <ApplyAudioOutput deviceId={deviceSelection.audiooutput} />
       <RoomAudioRenderer muted={speakerMuted} />
       <StartAudio label="Cliquer pour activer le son" />
+      </EngagementProvider>
     </LiveKitRoom>
   );
 }

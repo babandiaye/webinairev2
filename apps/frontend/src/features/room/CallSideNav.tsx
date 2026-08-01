@@ -1,6 +1,14 @@
-import { BarChart3, PenSquare, Presentation as PresentationIcon, Settings, Users, Video } from "lucide-react";
+import {
+  Activity,
+  BarChart3,
+  PenSquare,
+  Presentation as PresentationIcon,
+  Settings,
+  Users,
+  Video,
+} from "lucide-react";
 
-export type CallPanel = "breakout" | "whiteboard" | "polls" | "presentations";
+export type CallPanel = "breakout" | "whiteboard" | "polls" | "presentations" | "engagement";
 
 // Rail persistant remplaçant l'ancien menu "..." en popup — accès direct aux
 // fonctionnalités de la salle, toujours visible plutôt que caché derrière un clic
@@ -92,6 +100,20 @@ export function CallSideNav({
           >
             <Users size={19} />
             <span>Sous-groupes</span>
+          </button>
+        )}
+
+        {/* Réservé à l'animateur : afficher à un étudiant le temps de parole de
+            chacun de ses camarades relèverait de la surveillance, pas de la
+            pédagogie. BBB fait le même choix pour son tableau de bord. */}
+        {canManage && (
+          <button
+            className={itemClass("engagement")}
+            onClick={() => handleSelect("engagement")}
+            title="Engagement de la séance"
+          >
+            <Activity size={19} />
+            <span>Engagement</span>
           </button>
         )}
 

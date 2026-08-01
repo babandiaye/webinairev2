@@ -5,15 +5,7 @@ import { useIsMuted, useLocalParticipant, useTracks, VideoTrack } from "@livekit
 import type { TrackReference } from "@livekit/components-react";
 import { Video, VideoOff } from "lucide-react";
 import type { Role } from "@webinairev2/shared-types";
-
-function isModeratorMetadata(metadata: string | undefined): boolean {
-  try {
-    const parsed = metadata ? JSON.parse(metadata) : null;
-    return parsed?.isModerator === true;
-  } catch {
-    return false;
-  }
-}
+import { isModeratorMetadata } from "./participantMeta";
 
 function participantLabel(track: TrackReference): string {
   return track.participant.name || track.participant.identity;
