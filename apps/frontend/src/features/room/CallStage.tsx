@@ -100,6 +100,31 @@ export function CallStage({ canManage = true }: { canManage?: boolean }) {
     subscribedPubRef.current = nextPub;
   }, [canManage, mainTrack]);
 
+  // Même mécanique pour l'AUDIO, oubliée jusqu'ici : autoSubscribe:false
+  // désactive aussi l'abonnement automatique au micro, pas seulement à la
+  // caméra — sans ce bloc, un spectateur n'entend jamais personne, modérateur
+  // compris (RoomAudioRenderer, monté dans RoomPage.tsx, ne lit que ce qui est
+  // effectivement abonné). Contrairement à la vidéo, on s'abonne à TOUTES les
+  // pistes micro publiées, pas seulement une "principale" : plusieurs
+  // personnes peuvent avoir la parole en même temps (voir
+  // setSpeakerPermission), et un flux audio coûte quelques dizaines de kbps —
+  // rien à voir avec le coût d'une piste vidéo en plus.
+  const micTracks = useTracks([Track.Source.Microphone], { onlySubscribed: false });
+  const subscribedAudioRef = useRef<Set<RemoteTrackPublication>>(new Set());
+  useEffect(() => {
+    if (canManage) return;
+    const nextPubs = new Set(
+      micTracks.filter((t) => !t.participant.isLocal).map((t) => t.publication as RemoteTrackPublication)
+    );
+    for (const pub of subscribedAudioRef.current) {
+      if (!nextPubs.has(pub)) pub.setSubscribed(false);
+    }
+    for (const pub of nextPubs) {
+      if (!subscribedAudioRef.current.has(pub)) pub.setSubscribed(true);
+    }
+    subscribedAudioRef.current = nextPubs;
+  }, [canManage, micTracks]);
+
   const localRole: Role | undefined = (() => {
     try {
       return localParticipant.metadata ? JSON.parse(localParticipant.metadata).role : undefined;
