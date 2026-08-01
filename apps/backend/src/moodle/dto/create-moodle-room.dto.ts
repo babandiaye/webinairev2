@@ -1,4 +1,4 @@
-import { IsEmail, IsOptional, IsString, IsUrl, MinLength } from "class-validator";
+import { IsEmail, IsOptional, IsString, MinLength } from "class-validator";
 
 export class CreateMoodleRoomDto {
   @IsString()
@@ -30,7 +30,13 @@ export class CreateMoodleRoomDto {
   // Page d'activité Moodle où renvoyer l'utilisateur en fin de séance. Transmise
   // ici, serveur-à-serveur, et jamais par la barre d'adresse : chaque salle porte
   // celle de SA plateforme, sans liste blanche à configurer côté frontend.
+  //
+  // Validé par MoodleService.sanitizeReturnUrl et NON par @IsUrl ici — voir
+  // SyncMoodleUserDto pour le détail. Le rejet était ici encore plus brutal :
+  // un 400 fait échouer la création de la salle, donc l'ajout de l'activité
+  // tout entier par rollback (webinairev2_add_instance), sur un Moodle dont le
+  // seul tort est d'avoir un nom d'hôte sans TLD.
   @IsOptional()
-  @IsUrl({ require_protocol: true })
+  @IsString()
   returnUrl?: string;
 }
