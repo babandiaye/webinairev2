@@ -32,6 +32,11 @@ const envSchema = z.object({
   // lire l'espace libre réel de son volume — c'est donc un plafond déclaré, à
   // tenir à jour si le volume change.
   RECORDINGS_QUOTA_GB: z.coerce.number().positive().default(50),
+  // Durée de conservation d'un enregistrement finalisé, en jours. 0 = aucune
+  // purge automatique, et c'est le défaut délibéré : un enregistrement est
+  // souvent la seule trace d'un cours, rien ne doit être détruit sans une
+  // décision explicite de l'établissement.
+  RECORDINGS_RETENTION_DAYS: z.coerce.number().int().min(0).default(0),
   NODE_ENV: z.string().default("development"),
 });
 

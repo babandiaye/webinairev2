@@ -32,6 +32,12 @@ const EGRESS_TOKEN_TTL_SECONDS = 4 * 60 * 60;
 // normal, pas la peine d'interroger LiveKit à chaque lecture de la liste.
 const STARTING_RECONCILE_THRESHOLD_MS = 60 * 1000;
 
+// Plafond de suppressions par passage de la purge. Sert de garde-fou : si une
+// erreur de configuration ramenait la rétention à une valeur absurde, seuls 200
+// enregistrements partiraient à la première exécution — assez pour que ça se voie
+// dans les journaux et sur la page Statut avant que tout l'historique n'y passe.
+const RETENTION_BATCH_SIZE = 200;
+
 // Nom de fichier façon BigBlueButton : pas de préfixe applicatif, UUID compacté
 // (seul le tiret précédant les 12 derniers caractères est conservé) + horodatage.
 function buildRecordingFilepath(roomName: string): string {
@@ -146,6 +152,59 @@ export class RecordingsService {
           `Réessayez dans quelques minutes ou demandez à un collègue d'arrêter le sien.`
       );
     }
+  }
+
+  /**
+   * Supprime les enregistrements finalisés dépassant la durée de conservation
+   * (fichier S3 puis ligne en base). Retourne le nombre réellement purgé.
+   *
+   * Désactivé tant que RECORDINGS_RETENTION_DAYS vaut 0 (défaut) : sans purge, le
+   * volume sature en quelques semaines à ~1 Go/h, mais détruire l'unique trace
+   * d'un cours est irréversible — la durée est donc une décision de
+   * l'établissement, pas une valeur par défaut.
+   *
+   * Ne touche jamais : les enregistrements en cours (une purge concurrente d'une
+   * capture active corromprait le fichier en écriture) ni les FAILED, qui ne
+   * consomment pas d'espace et gardent la trace de l'incident.
+   */
+  async purgeExpired(): Promise<number> {
+    const days = this.config.get<number>("recordings.retentionDays")!;
+    if (days <= 0) return 0;
+
+    const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+    const expired = await this.prisma.recording.findMany({
+      where: { status: RecordingStatus.READY, createdAt: { lt: cutoff } },
+      orderBy: { createdAt: "asc" },
+      take: RETENTION_BATCH_SIZE,
+    });
+
+    let purged = 0;
+    for (const recording of expired) {
+      if (recording.s3Key) {
+        try {
+          await this.s3.deleteObject(recording.s3Key);
+        } catch (e) {
+          // Ordre volontaire : S3 d'abord, base ensuite. Supprimer la ligne alors
+          // que l'objet est toujours là le rendrait orphelin dans MinIO, sans plus
+          // aucune trace permettant de le retrouver. On saute, le prochain passage
+          // réessaiera.
+          this.logger.warn(`Purge reportée pour ${recording.id} (S3 indisponible) : ${e}`);
+          continue;
+        }
+      }
+      await this.prisma.recording.delete({ where: { id: recording.id } });
+      this.logger.log(
+        `Enregistrement purgé (rétention ${days} j) : ${recording.filename || recording.id}`
+      );
+      purged++;
+    }
+
+    if (expired.length === RETENTION_BATCH_SIZE) {
+      this.logger.warn(
+        `Purge plafonnée à ${RETENTION_BATCH_SIZE} enregistrements — le reliquat partira au prochain passage.`
+      );
+    }
+    return purged;
   }
 
   async stop(roomId: string): Promise<RecordingDto> {

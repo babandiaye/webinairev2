@@ -21,6 +21,7 @@ const DETAIL_LABELS: Record<string, string> = {
   usedBytes: "Utilisé",
   quotaBytes: "Quota",
   usedPercent: "Occupation",
+  retentionDays: "Rétention",
 };
 
 function formatBytes(bytes: number): string {
@@ -42,6 +43,9 @@ function formatDetailValue(key: string, value: number | string): string {
     return formatBytes(Number(value));
   }
   if (key === "usedPercent") return `${value} %`;
+  // 0 = purge automatique désactivée (défaut), à ne surtout pas afficher "0 j"
+  // qui se lirait comme "tout est supprimé immédiatement".
+  if (key === "retentionDays") return Number(value) > 0 ? `${value} j` : "désactivée";
   if (key === "lastReceivedAt") return value === "never" ? "jamais" : formatRelativeTime(String(value));
   return String(value);
 }

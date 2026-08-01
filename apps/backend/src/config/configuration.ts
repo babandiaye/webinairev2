@@ -40,5 +40,6 @@ export default () => ({
   recordings: {
     maxConcurrent: parseInt(process.env.MAX_CONCURRENT_RECORDINGS ?? "3", 10),
     quotaBytes: Math.round(parseFloat(process.env.RECORDINGS_QUOTA_GB ?? "50") * 1024 ** 3),
+    retentionDays: parseInt(process.env.RECORDINGS_RETENTION_DAYS ?? "0", 10),
   },
 });

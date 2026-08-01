@@ -169,12 +169,16 @@ export class StatusService {
       // saturation ; 95 % signifie qu'un seul enregistrement de 2 h peut déjà ne
       // pas tenir, ce qui est un incident, pas un avertissement.
       const status: ComponentHealth = ratio >= 0.95 ? "down" : ratio >= 0.8 ? "degraded" : "up";
+      // Une purge automatique ne doit jamais être invisible : si une rétention est
+      // active, l'administrateur doit la lire au même endroit que l'occupation.
+      const retentionDays = this.config.get<number>("recordings.retentionDays")!;
       return {
         status,
         details: {
           usedBytes,
           quotaBytes,
           usedPercent: Math.round(ratio * 100),
+          retentionDays,
         },
       };
     });

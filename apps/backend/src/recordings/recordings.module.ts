@@ -3,6 +3,7 @@ import { RoomRecordingsController, RecordingsController } from "./recordings.con
 import { RecordingsService } from "./recordings.service";
 import { EgressReconciliationService } from "./egress-reconciliation.service";
 import { RecordingsReconciliationCron } from "./reconciliation.cron";
+import { RecordingsRetentionCron } from "./retention.cron";
 import { LiveKitModule } from "../livekit/livekit.module";
 import { StorageModule } from "../storage/storage.module";
 import { RoomAccessGuard } from "../rooms/room-access.guard";
@@ -14,6 +15,7 @@ import { RoomAccessGuard } from "../rooms/room-access.guard";
     RecordingsService,
     EgressReconciliationService,
     RecordingsReconciliationCron,
+    RecordingsRetentionCron,
     RoomAccessGuard,
   ],
   exports: [EgressReconciliationService, RecordingsService],
