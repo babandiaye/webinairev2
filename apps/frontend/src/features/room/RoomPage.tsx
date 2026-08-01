@@ -92,6 +92,16 @@ export function RoomPage() {
   // changement de salle déclenché par nous (breakout ↔ principale, → on ne doit
   // surtout pas rediriger l'utilisateur hors de l'appli dans ce cas).
   const switchingRef = useRef(false);
+  // Marqueur posé par le plugin Moodle sur le lien de lancement
+  // (launch.php -> /rooms/:id?from=moodle). Il conditionne le retour vers Moodle
+  // en fin de séance : sans lui, quelqu'un qui ouvre webinairev2 directement se
+  // retrouvait expédié vers le Moodle de la salle alors qu'il n'en vient pas.
+  // L'URL de retour appartient à CETTE arrivée, pas à la salle — celle-ci est
+  // partagée par tous ses participants, quel que soit leur chemin d'accès.
+  // Lu une fois au montage : la valeur ne peut plus changer pour cette séance.
+  const cameFromMoodleRef = useRef(
+    new URLSearchParams(window.location.search).get("from") === "moodle"
+  );
 
   useEffect(() => {
     localStorage.setItem(SPEAKER_MUTED_KEY, speakerMuted ? "1" : "0");
@@ -258,16 +268,16 @@ export function RoomPage() {
           switchingRef.current = false;
           return;
         }
-        // Séance lancée depuis Moodle : on rend la main à la page de l'activité
-        // d'où l'utilisateur est parti, au lieu de le laisser sur l'accueil de
-        // webinairev2 sans chemin de retour vers son cours.
-        // La valeur vient de la SALLE (mainConnection, pas activeConnection :
-        // en sous-groupe cette dernière désigne une autre Room), transmise
-        // serveur-à-serveur par le plugin — jamais lue dans la barre d'adresse,
-        // donc pas de redirection ouverte à filtrer ici.
+        // Retour vers Moodle SEULEMENT pour qui en vient (marqueur from=moodle) :
+        // un participant arrivé directement sur webinairev2 reste chez nous, même
+        // si la salle est par ailleurs rattachée à une activité Moodle.
+        // La destination, elle, vient de la SALLE (mainConnection, pas
+        // activeConnection : en sous-groupe cette dernière désigne une autre
+        // Room), transmise serveur-à-serveur par le plugin — jamais lue dans la
+        // barre d'adresse, donc pas de redirection ouverte à filtrer ici.
         // `replace` et non `href` : le bouton Précédent ne doit pas renvoyer
         // dans une salle qu'on vient de quitter.
-        const returnUrl = mainConnection?.returnUrl;
+        const returnUrl = cameFromMoodleRef.current ? mainConnection?.returnUrl : null;
         if (returnUrl) {
           window.location.replace(returnUrl);
           return;
