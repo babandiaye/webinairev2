@@ -27,11 +27,12 @@ const envSchema = z.object({
   // dizaines. Défaut volontairement bas — mieux vaut refuser un 4e enregistrement
   // avec un message clair que d'en faire échouer trois déjà en cours.
   MAX_CONCURRENT_RECORDINGS: z.coerce.number().int().positive().default(3),
-  // Budget de stockage alloué aux enregistrements, en Go. Sert uniquement à
-  // alerter (page Statut) : MinIO est sur un hôte distant, le backend ne peut pas
-  // lire l'espace libre réel de son volume — c'est donc un plafond déclaré, à
-  // tenir à jour si le volume change.
-  RECORDINGS_QUOTA_GB: z.coerce.number().positive().default(50),
+  // Budget de stockage alloué aux enregistrements, en Go. 0 = aucune alerte
+  // d'occupation (défaut) : la carte Statut se contente alors d'afficher le
+  // volume utilisé, sans verdict. Une valeur > 0 réactive l'alerte à 80 % / 95 %.
+  // MinIO étant sur un hôte distant, ce plafond est de toute façon déclaré et
+  // non mesuré — le backend ne peut pas lire l'espace libre réel de son volume.
+  RECORDINGS_QUOTA_GB: z.coerce.number().min(0).default(0),
   // Durée de conservation d'un enregistrement finalisé, en jours. 0 = aucune
   // purge automatique, et c'est le défaut délibéré : un enregistrement est
   // souvent la seule trace d'un cours, rien ne doit être détruit sans une

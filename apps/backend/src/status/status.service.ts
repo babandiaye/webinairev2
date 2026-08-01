@@ -163,24 +163,25 @@ export class StatusService {
       });
       // BigInt : Number est sûr ici (2^53 octets = 9 Po, hors de portée).
       const usedBytes = Number(aggregate._sum.size ?? 0n);
-      const ratio = usedBytes / quotaBytes;
+      // Une purge automatique ne doit jamais être invisible : si une rétention est
+      // active, l'administrateur doit la lire au même endroit que l'occupation.
+      const retentionDays = this.config.get<number>("recordings.retentionDays")!;
 
+      const details: Record<string, number | string> = { usedBytes, retentionDays };
+
+      // Quota à 0 = alerte désactivée : le volume utilisé reste affiché (c'est une
+      // information utile en soi), mais aucun verdict de santé ne serait honnête
+      // sans plafond auquel le comparer.
+      if (quotaBytes <= 0) return { status: "up" as ComponentHealth, details };
+
+      const ratio = usedBytes / quotaBytes;
+      details.quotaBytes = quotaBytes;
+      details.usedPercent = Math.round(ratio * 100);
       // 80 % laisse encore de quoi encaisser une journée de cours avant la
       // saturation ; 95 % signifie qu'un seul enregistrement de 2 h peut déjà ne
       // pas tenir, ce qui est un incident, pas un avertissement.
       const status: ComponentHealth = ratio >= 0.95 ? "down" : ratio >= 0.8 ? "degraded" : "up";
-      // Une purge automatique ne doit jamais être invisible : si une rétention est
-      // active, l'administrateur doit la lire au même endroit que l'occupation.
-      const retentionDays = this.config.get<number>("recordings.retentionDays")!;
-      return {
-        status,
-        details: {
-          usedBytes,
-          quotaBytes,
-          usedPercent: Math.round(ratio * 100),
-          retentionDays,
-        },
-      };
+      return { status, details };
     });
   }
 
