@@ -9,6 +9,7 @@ import type {
   CreateRoomDto,
   CreateUserDto,
   CsvImportSummaryDto,
+  EnrollmentCsvSummaryDto,
   DownloadLinkDto,
   EnrollableUserDto,
   EnrollmentDto,
@@ -106,6 +107,22 @@ export const api = {
     request<EnrollmentDto>(`/rooms/${roomId}/enrollments`, { method: "POST", body: JSON.stringify(dto) }),
   unenrollUser: (roomId: string, userId: string) =>
     request<void>(`/rooms/${roomId}/enrollments/${userId}`, { method: "DELETE" }),
+  enrollmentsCsvTemplateUrl: (roomId: string) => `${API_URL}/rooms/${roomId}/enrollments/csv-template`,
+  async importEnrollmentsCsv(roomId: string, file: File): Promise<EnrollmentCsvSummaryDto> {
+    const form = new FormData();
+    form.append("file", file);
+    // Pas de Content-Type manuel : le navigateur doit fixer la boundary multipart.
+    const res = await fetch(`${API_URL}/rooms/${roomId}/enrollments/import-csv`, {
+      method: "POST",
+      credentials: "include",
+      body: form,
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => null);
+      throw new Error(body?.message || `Import échoué (${res.status})`);
+    }
+    return res.json();
+  },
   searchEnrollableUsers: (q: string) =>
     request<EnrollableUserDto[]>(`/users/enrollable?q=${encodeURIComponent(q)}`),
 

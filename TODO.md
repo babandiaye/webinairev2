@@ -98,18 +98,28 @@ persistance des traces**.
 - [x] Rétention (mécanisme en place, désactivé).
 - [x] Écran de pré-connexion avec test d'écho.
 - [ ] ~~Chat persisté en base~~ — écarté (voir ci-dessus).
-- [ ] **Réactions et file de mains levées** — aujourd'hui seule la main levée
-  existe, en « fire-and-forget » sur le canal de données : un modérateur qui
-  rejoint ne voit pas les mains déjà levées et il n'y a aucun ordre d'arrivée.
-- [ ] **Verrous granulaires façon BBB** — `micLocked`/`cameraLocked` sont la
-  bonne architecture mais BBB expose ~8 verrous (voir les caméras des autres,
-  chat public, chat privé, notes partagées, voir la liste des participants, se
-  démuter soi-même). L'élargissement coûte peu maintenant que la poussée en
-  direct (`applySettingsToConnectedParticipants`) est écrite.
-- [ ] **Inscription en masse par CSV** — l'import CSV existe déjà pour les
-  *utilisateurs* (`users.controller.ts`), mais l'inscription à un cours reste
-  unitaire par recherche. Bloquant pour une promotion de 300 étudiants.
-- [ ] **Tableau de bord d'engagement (live, sans stockage)** — ce que LiveKit
+- [x] **Réactions et file de mains levées ordonnée** — message `sync` à l'entrée
+  (un animateur qui rafraîchissait sa page trouvait la file vide), ordre transmis
+  en durée écoulée et non en horodatage absolu (deux horloges divergentes
+  suffisaient à inverser la file), rang cliquable et « Tout baisser ».
+- [x] **Verrous d'interaction** — discussion, réactions, liste des participants.
+  Trois et non les huit de BBB : « voir les caméras des autres » existait déjà de
+  fait (`CallStage` ne montre la bande secondaire qu'à `canManage`), « se démuter
+  soi-même » fait doublon avec `micLocked`, et « chat privé »/« notes partagées »
+  portent sur des fonctionnalités absentes. Ces trois-là ne correspondent à
+  AUCUNE permission LiveKit (le SFU ne filtre pas un canal de données par sujet) :
+  ils sont appliqués par les clients des deux côtés — contrôle masqué chez
+  l'émetteur, réception filtrée chez chaque destinataire. Ce n'est pas la
+  garantie d'un filtrage serveur et ne doit pas être présenté comme tel.
+  Propagation par les métadonnées de salle LiveKit.
+- [x] **Inscription en masse par CSV** — parseur extrait en
+  `common/csv-rows.util.ts` et partagé avec l'import d'utilisateurs (un
+  enseignant n'a pas à connaître deux formats). Les comptes inconnus sont créés
+  en `pending:`, sans quoi un cours ne pourrait pas être préparé avant la
+  première connexion des étudiants ; la colonne `role` est délibérément ignorée,
+  cette route étant ouverte aux enseignants.
+- [x] **Tableau de bord d'engagement (live, sans stockage)** — livré le
+  2026-08-01, avec export CSV et PDF. Ce que LiveKit
   fournit réellement, vérifié dans `@livekit/protocol` 1.49 :
   - *Temps de présence* et *nombre de connexions* : ✅ déjà couverts par les
     webhooks `participant_joined`/`participant_left` et le modèle

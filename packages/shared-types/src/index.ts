@@ -119,6 +119,17 @@ export interface CsvImportSummaryDto {
   skipped: number;
 }
 
+export interface EnrollmentCsvSummaryDto {
+  /** Lignes retenues (email valide, doublons du fichier fusionnés). */
+  total: number;
+  /** Inscriptions nouvellement créées. */
+  enrolled: number;
+  /** Déjà inscrits — le fichier peut être redéposé sans effet de bord. */
+  alreadyEnrolled: number;
+  /** Comptes créés en attente de première connexion Keycloak. */
+  createdUsers: number;
+}
+
 export interface RecordingDto {
   id: string;
   roomId: string;

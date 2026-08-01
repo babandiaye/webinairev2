@@ -1,8 +1,10 @@
-import { ConflictException, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from "@nestjs/common";
 import { Prisma, Role, Room, RoomType } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
 import { SessionUser } from "../auth/session.types";
-import { EnrollmentDto } from "@webinairev2/shared-types";
+import { EnrollmentDto, EnrollmentCsvSummaryDto } from "@webinairev2/shared-types";
+import { CSV_IMPORT_BATCH_SIZE, parseCsvRows } from "../common/csv-rows.util";
+import { randomUUID } from "crypto";
 
 @Injectable()
 export class EnrollmentsService {
@@ -130,5 +132,112 @@ export class EnrollmentsService {
       select: { roomId: true },
     });
     return new Set(rows.map((r) => r.roomId));
+  }
+
+  csvTemplate(): string {
+    return [
+      "email,prenom,nom",
+      "etudiant1@unchk.edu.sn,Aminata,Diallo",
+      "etudiant2@unchk.edu.sn,Moussa,Ndiaye",
+    ].join("\n");
+  }
+
+  /**
+   * Inscrit une promotion entière à partir d'un fichier CSV.
+   *
+   * Inscrire 300 étudiants un par un via la recherche n'est pas praticable —
+   * c'était le vrai frein à l'usage de la fonctionnalité d'inscription.
+   *
+   * Les comptes inconnus sont CRÉÉS en "pending:" (même mécanisme que l'import
+   * d'utilisateurs) plutôt qu'ignorés : sans ça, un enseignant ne pourrait pas
+   * préparer son cours avant que ses étudiants se soient connectés au moins une
+   * fois, ce qui vide la fonctionnalité de son intérêt. Cela n'ouvre aucun
+   * accès en soi : la ligne créée ne devient un compte utilisable qu'à la
+   * première authentification Keycloak réussie (UserSyncService réconcilie alors
+   * par email).
+   *
+   * La colonne "role" du format partagé est délibérément IGNORÉE ici : cette
+   * route est ouverte aux enseignants (RequireRoomAccess), et honorer un
+   * "role=ADMIN" dans un fichier déposé leur permettrait de se fabriquer des
+   * administrateurs. Tout le monde est créé VIEWER ; la promotion de rôle reste
+   * une action d'administrateur.
+   */
+  async importFromCsv(
+    roomId: string,
+    text: string,
+    requesterId: string
+  ): Promise<EnrollmentCsvSummaryDto> {
+    const rows = parseCsvRows(text);
+    if (rows.length === 0) {
+      throw new BadRequestException("Aucun email valide trouvé dans le fichier");
+    }
+
+    // Un même email répété dans le fichier ne doit compter qu'une fois, sans
+    // quoi les totaux rapportés seraient faux.
+    const rowsByEmail = new Map(rows.map((row) => [row.email, row]));
+    const uniqueRows = [...rowsByEmail.values()];
+
+    const emailToUserId = new Map<string, string>();
+    for (let i = 0; i < uniqueRows.length; i += CSV_IMPORT_BATCH_SIZE) {
+      const batch = uniqueRows.slice(i, i + CSV_IMPORT_BATCH_SIZE).map((r) => r.email);
+      const found = await this.prisma.user.findMany({
+        where: { email: { in: batch } },
+        select: { id: true, email: true },
+      });
+      for (const user of found) emailToUserId.set(user.email, user.id);
+    }
+
+    const missing = uniqueRows.filter((row) => !emailToUserId.has(row.email));
+    let createdUsers = 0;
+    for (let i = 0; i < missing.length; i += CSV_IMPORT_BATCH_SIZE) {
+      const batch = missing.slice(i, i + CSV_IMPORT_BATCH_SIZE);
+      const result = await this.prisma.user.createMany({
+        data: batch.map((row) => ({
+          email: row.email,
+          name: row.name,
+          role: Role.VIEWER,
+          keycloakId: `pending:${randomUUID()}`,
+        })),
+        skipDuplicates: true,
+      });
+      createdUsers += result.count;
+    }
+
+    // Relecture après création plutôt que réutilisation des identifiants
+    // supposés : createMany ne les renvoie pas, et skipDuplicates peut avoir
+    // écarté une ligne créée entre-temps par un import concurrent.
+    if (missing.length > 0) {
+      for (let i = 0; i < missing.length; i += CSV_IMPORT_BATCH_SIZE) {
+        const batch = missing.slice(i, i + CSV_IMPORT_BATCH_SIZE).map((r) => r.email);
+        const found = await this.prisma.user.findMany({
+          where: { email: { in: batch } },
+          select: { id: true, email: true },
+        });
+        for (const user of found) emailToUserId.set(user.email, user.id);
+      }
+    }
+
+    const userIds = uniqueRows
+      .map((row) => emailToUserId.get(row.email))
+      .filter((id): id is string => Boolean(id));
+
+    let enrolled = 0;
+    for (let i = 0; i < userIds.length; i += CSV_IMPORT_BATCH_SIZE) {
+      const batch = userIds.slice(i, i + CSV_IMPORT_BATCH_SIZE);
+      // skipDuplicates plutôt qu'un upsert par ligne : redéposer le fichier
+      // d'une promotion doit rester sans effet, et rester une seule requête.
+      const result = await this.prisma.enrollment.createMany({
+        data: batch.map((userId) => ({ roomId, userId, createdBy: requesterId })),
+        skipDuplicates: true,
+      });
+      enrolled += result.count;
+    }
+
+    return {
+      total: uniqueRows.length,
+      enrolled,
+      alreadyEnrolled: userIds.length - enrolled,
+      createdUsers,
+    };
   }
 }

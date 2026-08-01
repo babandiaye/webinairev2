@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { ChangeEvent, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Crown, UserPlus, UserMinus } from "lucide-react";
+import { ArrowLeft, Crown, Download, Upload, UserPlus, UserMinus } from "lucide-react";
 import { EnrollableUserDto, EnrollmentDto, RoomDto } from "@webinairev2/shared-types";
 import { api } from "../../api/client";
 import { useAuth } from "../../auth/AuthProvider";
@@ -21,6 +21,9 @@ export function EnrollmentsPage() {
   const [results, setResults] = useState<EnrollableUserDto[]>([]);
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [importing, setImporting] = useState(false);
+  const [importSummary, setImportSummary] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -90,6 +93,30 @@ export function EnrollmentsPage() {
     }
   }
 
+  async function handleImportFile(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // permet de resélectionner le même fichier ensuite
+    if (!file || !id) return;
+    setError(null);
+    setImportSummary(null);
+    setImporting(true);
+    try {
+      const summary = await api.importEnrollmentsCsv(id, file);
+      setImportSummary(
+        `${summary.enrolled} inscription(s) créée(s), ${summary.alreadyEnrolled} déjà inscrit(s) ` +
+          `sur ${summary.total} email(s) valide(s)` +
+          (summary.createdUsers > 0
+            ? `, dont ${summary.createdUsers} compte(s) créé(s) en attente de première connexion.`
+            : ".")
+      );
+      setEnrollments(await api.listEnrollments(id));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Erreur inconnue");
+    } finally {
+      setImporting(false);
+    }
+  }
+
   return (
     <DashboardLayout user={user} search={search} onSearchChange={setSearch}>
       <button className="back-link" onClick={() => navigate("/")}>
@@ -153,7 +180,32 @@ export function EnrollmentsPage() {
       <div className="panel" style={{ marginTop: 20 }}>
         <div className="panel-header">
           <h3>Inscrits ({enrollments.length})</h3>
+          {/* Inscrire une promotion de 300 étudiants un par un via la recherche
+              ci-dessus n'est pas praticable — c'était le vrai frein à l'usage de
+              cette page. */}
+          <div className="panel-header-actions">
+            <a className="btn btn-ghost" href={api.enrollmentsCsvTemplateUrl(id!)} download>
+              <Download size={15} />
+              Modèle CSV
+            </a>
+            <button
+              className="btn btn-ghost"
+              disabled={importing}
+              onClick={() => fileInputRef.current?.click()}
+            >
+              <Upload size={15} />
+              {importing ? "Import…" : "Importer un CSV"}
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".csv,text/csv"
+              style={{ display: "none" }}
+              onChange={handleImportFile}
+            />
+          </div>
         </div>
+        {importSummary && <div className="info-banner">{importSummary}</div>}
         {enrollments.length === 0 ? (
           <p className="empty-state">Personne n'est encore inscrit à ce cours.</p>
         ) : (
