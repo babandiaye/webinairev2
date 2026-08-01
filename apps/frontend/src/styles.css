@@ -3091,3 +3091,14 @@ button.stat-card:hover {
 .call-hand-rank-static {
   cursor: default;
 }
+
+.call-chat-locked {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 13px;
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 0.78rem;
+}

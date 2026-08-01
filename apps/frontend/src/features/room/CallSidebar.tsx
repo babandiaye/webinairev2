@@ -51,16 +51,26 @@ export function CallSidebar({
   mobileOpen: boolean;
   onCloseMobile: () => void;
 }) {
-  const participants = useParticipants();
+  const allParticipants = useParticipants();
   const [actionBusy, setActionBusy] = useState<string | null>(null);
   // Main levée : signal éphémère, pas de persistance nécessaire (comme un
   // indicateur "en train d'écrire") — état partagé, voir RoomSignalsProvider.
-  const { raisedHands, lowerHand, lowerAllHands } = useRoomSignals();
+  const { raisedHands, lowerHand, lowerAllHands, locks } = useRoomSignals();
   // Position dans la file, par ordre d'arrivée : sans elle, le modérateur voit
   // bien "trois mains levées" mais n'a aucun moyen de savoir qui attend depuis
   // le plus longtemps — et donne la parole au premier nom de la liste, qui est
   // l'ordre alphabétique des participants, pas celui de la demande.
   const handPosition = new Map(raisedHands.map((hand, index) => [hand.identity, index + 1]));
+
+  // Liste masquée : un participant ne voit plus que les animateurs et lui-même.
+  // Il garde sa propre ligne — se voir disparaître de la liste des présents
+  // ressemblerait à un dysfonctionnement, pas à une règle.
+  const participants =
+    locks.participantListLocked && !canManage
+      ? allParticipants.filter(
+          (p) => p.identity === localIdentity || parseMetadata(p.metadata)?.isModerator === true
+        )
+      : allParticipants;
 
   async function handleMute(identity: string) {
     setActionBusy(identity);
@@ -139,7 +149,7 @@ export function CallSidebar({
             CSS) : démonter <CallChat> perdrait l'historique de useChat() à
             chaque changement d'onglet, cf. commentaire dans CallChat.tsx. */}
         <div className={`call-sidebar-pane ${tab === "chat" ? "" : "call-sidebar-pane-hidden"}`}>
-          <CallChat />
+          <CallChat canManage={canManage} />
         </div>
         <div className={`call-sidebar-pane ${tab === "participants" ? "" : "call-sidebar-pane-hidden"}`}>
           {canManage && raisedHands.length > 0 && (

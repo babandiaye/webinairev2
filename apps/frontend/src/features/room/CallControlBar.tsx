@@ -141,8 +141,9 @@ export function CallControlBar({
   // État partagé avec la liste des participants et la scène : une instance par
   // composant se contredirait, publishData n'étant pas ré-émis vers son
   // expéditeur (voir RoomSignalsProvider).
-  const { isRaised, toggleHand, sendReaction } = useRoomSignals();
+  const { isRaised, toggleHand, sendReaction, locks } = useRoomSignals();
   const [reactionsOpen, setReactionsOpen] = useState(false);
+  const canReact = canManage || !locks.reactionsLocked;
 
   // Un participant démarre sans droit de publication (voir livekit-token.service.ts) —
   // le modérateur l'accorde par salle (CallSidebar), jamais par un simple clic
@@ -297,6 +298,7 @@ export function CallControlBar({
       {/* Réactions : le seul retour possible pour un étudiant dont le micro est
           verrouillé, sans interrompre l'enseignant. Le choix se referme après un
           clic — enchaîner les émojis n'apporte rien et brouille la scène. */}
+      {canReact && (
       <div className="call-reaction-wrap">
         {reactionsOpen && (
           <div className="call-reaction-picker">
@@ -322,6 +324,7 @@ export function CallControlBar({
           onClick={() => setReactionsOpen((v) => !v)}
         />
       </div>
+      )}
 
       <SimpleControlButton label="Discussion" icon={<MessageSquare size={22} />} onClick={onOpenChat} />
 

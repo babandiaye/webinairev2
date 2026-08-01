@@ -37,11 +37,42 @@ export interface RoomDto {
   // true = verrouillé (comportement par défaut), voir livekit-token.service.ts.
   micLocked: boolean;
   cameraLocked: boolean;
+  // Verrous d'interaction — false par défaut (rien de verrouillé), voir
+  // RoomLocksMetadata pour le mode d'application.
+  chatLocked: boolean;
+  reactionsLocked: boolean;
+  participantListLocked: boolean;
 }
 
 export interface UpdateRoomSettingsDto {
   micLocked?: boolean;
   cameraLocked?: boolean;
+  chatLocked?: boolean;
+  reactionsLocked?: boolean;
+  participantListLocked?: boolean;
+}
+
+/**
+ * Verrous d'interaction publiés dans les MÉTADONNÉES de la salle LiveKit par
+ * RoomsService.syncRoomMetadata, et relus côté client via
+ * RoomEvent.RoomMetadataChanged.
+ *
+ * Ce canal-là et pas un appel d'API : le changement doit atteindre en direct des
+ * participants qui ne rappellent jamais GET /rooms/:id après leur entrée, et les
+ * métadonnées de salle sont exactement le mécanisme prévu par LiveKit pour un
+ * état partagé à l'échelle de la salle.
+ *
+ * Contrairement à micLocked/cameraLocked, ces verrous ne correspondent à AUCUNE
+ * permission LiveKit : le SFU ne sait pas filtrer un canal de données par sujet.
+ * Ils sont donc appliqués par les clients — l'émetteur masque le contrôle, et
+ * tous les récepteurs ignorent ce qui arriverait malgré tout d'un
+ * non-modérateur. Contourner suppose donc de modifier le navigateur de CHAQUE
+ * destinataire, pas seulement le sien.
+ */
+export interface RoomLocksMetadata {
+  chatLocked: boolean;
+  reactionsLocked: boolean;
+  participantListLocked: boolean;
 }
 
 export interface CreateRoomDto {

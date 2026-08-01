@@ -91,6 +91,15 @@ model Room {
   // createRoomToken et RoomsService.updateSettings).
   micLocked              Boolean    @default(true)
   cameraLocked           Boolean    @default(true)
+  // Verrous d'interaction, par défaut FALSE (rien de verrouillé) : contrairement
+  // à micLocked/cameraLocked, ce ne sont pas le comportement normal d'un cours
+  // mais des mesures ponctuelles (examen, chat qui déborde). Ils ne se traduisent
+  // par aucune permission LiveKit — le SFU ne sait pas filtrer un canal de
+  // données par sujet — et sont donc appliqués côté client, poussés en direct via
+  // les métadonnées de la salle LiveKit (voir RoomsService.syncRoomMetadata).
+  chatLocked             Boolean    @default(false)
+  reactionsLocked        Boolean    @default(false)
+  participantListLocked  Boolean    @default(false)
   // Rempli uniquement pour une Room créée depuis le plugin Moodle (mod_webinairev2) —
   // moodleMeetingId identifie l'instance d'activité de façon unique et sert de clé
   // d'idempotence (POST /moodle/rooms ne doit jamais créer deux Room pour la même

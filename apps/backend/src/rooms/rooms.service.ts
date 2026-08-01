@@ -5,7 +5,7 @@ import { randomUUID } from "crypto";
 import { PrismaService } from "../prisma/prisma.service";
 import { LiveKitClientsService } from "../livekit/livekit-clients.service";
 import { LiveKitTokenService } from "../livekit/livekit-token.service";
-import { JoinRoomResponseDto, RoomDto } from "@webinairev2/shared-types";
+import { JoinRoomResponseDto, RoomDto, RoomLocksMetadata } from "@webinairev2/shared-types";
 import { ConfigService } from "@nestjs/config";
 import { SessionUser } from "../auth/session.types";
 import { BreakoutRoomsService } from "../breakout-rooms/breakout-rooms.service";
@@ -102,6 +102,10 @@ export class RoomsService {
       // si la salle LiveKit existe déjà), nécessaire car close() la supprime et
       // LiveKit ferme aussi une salle vide au bout de emptyTimeout.
       await this.livekitClients.roomService.createRoom({ name: room.roomName, emptyTimeout: 300 });
+      // Une salle LiveKit qui vient d'être (re)créée naît sans métadonnées : sans
+      // cette resynchronisation, des verrous posés lors d'une séance précédente
+      // resteraient vrais en base mais invisibles des clients de la nouvelle.
+      await this.syncRoomMetadata(room);
       if (room.status === RoomStatus.ENDED) {
         // Une nouvelle session repart d'un tableau blanc vierge — sinon le contenu
         // de la réunion précédente réapparaît telle quelle au redémarrage.
@@ -352,14 +356,51 @@ export class RoomsService {
       data: {
         ...(dto.micLocked !== undefined && { micLocked: dto.micLocked }),
         ...(dto.cameraLocked !== undefined && { cameraLocked: dto.cameraLocked }),
+        ...(dto.chatLocked !== undefined && { chatLocked: dto.chatLocked }),
+        ...(dto.reactionsLocked !== undefined && { reactionsLocked: dto.reactionsLocked }),
+        ...(dto.participantListLocked !== undefined && {
+          participantListLocked: dto.participantListLocked,
+        }),
       },
     });
 
     await this.applySettingsToConnectedParticipants(room);
+    await this.syncRoomMetadata(room);
 
     // Route déjà gardée par RoomAccessGuard : seul un gestionnaire de la salle
     // atteint ce point.
     return this.toDto(room, true);
+  }
+
+  /**
+   * Publie les verrous d'interaction dans les métadonnées de la salle LiveKit.
+   *
+   * micLocked/cameraLocked se traduisent en permissions LiveKit et sont donc
+   * imposés par le SFU lui-même. Ces trois-là n'ont aucun équivalent : le SFU ne
+   * sait pas filtrer un canal de données par sujet, ni masquer une liste de
+   * participants. Les métadonnées de salle sont le mécanisme prévu par LiveKit
+   * pour un état partagé à l'échelle de la salle — poussées à tout le monde en
+   * direct (RoomEvent.RoomMetadataChanged), là où un simple champ du RoomDto
+   * n'atteindrait jamais des participants qui ne rappellent plus l'API après
+   * leur entrée.
+   */
+  private async syncRoomMetadata(room: Room): Promise<void> {
+    const metadata: RoomLocksMetadata = {
+      chatLocked: room.chatLocked,
+      reactionsLocked: room.reactionsLocked,
+      participantListLocked: room.participantListLocked,
+    };
+    try {
+      await this.livekitClients.roomService.updateRoomMetadata(
+        room.roomName,
+        JSON.stringify(metadata)
+      );
+    } catch {
+      // Salle LiveKit inexistante (personne connecté) : rien à pousser. Les
+      // valeurs voyagent de toute façon dans le RoomDto de JoinRoomResponse pour
+      // ceux qui arriveront ensuite, et la salle sera resynchronisée au premier
+      // changement de réglage suivant.
+    }
   }
 
   // Pousse la politique micro/caméra résultante à tous les participants déjà
@@ -466,6 +507,9 @@ export class RoomsService {
       isMoodle: room.moodleMeetingId !== null,
       micLocked: room.micLocked,
       cameraLocked: room.cameraLocked,
+      chatLocked: room.chatLocked,
+      reactionsLocked: room.reactionsLocked,
+      participantListLocked: room.participantListLocked,
     };
   }
 }

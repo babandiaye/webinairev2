@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { Send } from "lucide-react";
+import { Lock, Send } from "lucide-react";
 import { useChat, useLocalParticipant } from "@livekit/components-react";
+import { isModeratorMetadata } from "./participantMeta";
+import { useRoomSignals } from "./useRoomSignals";
 
 function formatTime(timestamp: number): string {
   return new Date(timestamp).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
@@ -13,15 +15,25 @@ function formatTime(timestamp: number): string {
 // hook perd son historique et les messages déjà reçus disparaissent. C'est
 // pour ça que CallSidebar affiche/masque ce panneau en CSS plutôt qu'en JSX
 // conditionnel.
-export function CallChat() {
+export function CallChat({ canManage }: { canManage: boolean }) {
   const { chatMessages, send, isSending } = useChat();
   const { localParticipant } = useLocalParticipant();
+  const { locks } = useRoomSignals();
   const [draft, setDraft] = useState("");
   const listRef = useRef<HTMLDivElement>(null);
 
+  const chatBlocked = locks.chatLocked && !canManage;
+  // Filtrage À LA RÉCEPTION en plus du masquage de la saisie : le SFU ne sait pas
+  // filtrer un canal de données par sujet, la seule barrière possible est que
+  // chaque destinataire écarte ce qui ne devrait pas circuler. L'animateur reste
+  // toujours lisible, verrou ou non — c'est lui qui l'a posé.
+  const visibleMessages = locks.chatLocked
+    ? chatMessages.filter((m) => isModeratorMetadata(m.from?.metadata))
+    : chatMessages;
+
   useEffect(() => {
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" });
-  }, [chatMessages.length]);
+  }, [visibleMessages.length]);
 
   async function handleSend() {
     const text = draft.trim();
@@ -38,8 +50,8 @@ export function CallChat() {
   return (
     <div className="call-chat-panel">
       <div className="call-chat-messages" ref={listRef}>
-        {chatMessages.length === 0 && <p className="empty-state">Aucun message pour l'instant.</p>}
-        {chatMessages.map((m) => {
+        {visibleMessages.length === 0 && <p className="empty-state">Aucun message pour l'instant.</p>}
+        {visibleMessages.map((m) => {
           const own = m.from?.identity === localParticipant.identity;
           return (
             <div className={`call-chat-message ${own ? "own" : ""}`} key={m.id}>
@@ -53,20 +65,32 @@ export function CallChat() {
         })}
       </div>
 
-      <div className="call-chat-input-row">
-        <input
-          className="call-chat-input"
-          placeholder="Écrire un message…"
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") handleSend();
-          }}
-        />
-        <button className="call-chat-send" onClick={handleSend} disabled={!draft.trim() || isSending} title="Envoyer">
-          <Send size={16} />
-        </button>
-      </div>
+      {chatBlocked ? (
+        <div className="call-chat-locked">
+          <Lock size={14} />
+          La discussion est réservée à l'animateur.
+        </div>
+      ) : (
+        <div className="call-chat-input-row">
+          <input
+            className="call-chat-input"
+            placeholder="Écrire un message…"
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") handleSend();
+            }}
+          />
+          <button
+            className="call-chat-send"
+            onClick={handleSend}
+            disabled={!draft.trim() || isSending}
+            title="Envoyer"
+          >
+            <Send size={16} />
+          </button>
+        </div>
+      )}
     </div>
   );
 }

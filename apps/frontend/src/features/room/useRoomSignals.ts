@@ -2,6 +2,9 @@ import { createContext, createElement, useCallback, useContext, useEffect, useMe
 import { RoomEvent } from "livekit-client";
 import type { Participant, RemoteParticipant } from "livekit-client";
 import { useRoomContext } from "@livekit/components-react";
+import type { RoomDto, RoomLocksMetadata } from "@webinairev2/shared-types";
+import { isModeratorMetadata } from "./participantMeta";
+import { useRoomLocks } from "./useRoomLocks";
 
 export const HAND_RAISE_TOPIC = "hand-raise";
 export const REACTION_TOPIC = "reaction";
@@ -206,13 +209,17 @@ type ReactionMessage = { name: string; emoji: string };
  * disparaissent. Rien n'est conservé — le tableau d'engagement en tient le
  * compte pour la durée de la séance (voir useEngagementStats).
  */
-function useReactionsState(): {
+function useReactionsState(reactionsLocked: boolean): {
   reactions: FloatingReaction[];
   send: (emoji: ReactionEmoji) => void;
 } {
   const room = useRoomContext();
   const [reactions, setReactions] = useState<FloatingReaction[]>([]);
   const timeoutsRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+  // Relu dans le gestionnaire sans le faire dépendre de la valeur : un
+  // changement de verrou ne doit pas réabonner l'écoute en plein flux.
+  const lockedRef = useRef(reactionsLocked);
+  lockedRef.current = reactionsLocked;
 
   const push = useCallback((name: string, emoji: string) => {
     const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -224,8 +231,14 @@ function useReactionsState(): {
   }, []);
 
   useEffect(() => {
-    function handleData(payload: Uint8Array, _participant?: RemoteParticipant, _kind?: unknown, topic?: string) {
+    function handleData(payload: Uint8Array, participant?: RemoteParticipant, _kind?: unknown, topic?: string) {
       if (topic !== REACTION_TOPIC) return;
+      // Application du verrou À LA RÉCEPTION, en plus du masquage du bouton chez
+      // l'émetteur : le SFU ne sait pas filtrer un canal de données par sujet, la
+      // seule barrière possible est donc que chaque destinataire ignore ce qui ne
+      // devrait pas circuler. Contourner suppose alors de modifier le navigateur
+      // de TOUS les destinataires, pas seulement le sien.
+      if (lockedRef.current && !isModeratorMetadata(participant?.metadata)) return;
       try {
         const message: ReactionMessage = JSON.parse(new TextDecoder().decode(payload));
         if (message.emoji) push(message.name, message.emoji);
@@ -280,6 +293,7 @@ type RoomSignals = {
   lowerAllHands: () => void;
   reactions: FloatingReaction[];
   sendReaction: (emoji: ReactionEmoji) => void;
+  locks: RoomLocksMetadata;
 };
 
 const RoomSignalsContext = createContext<RoomSignals | null>(null);
@@ -299,13 +313,18 @@ const RoomSignalsContext = createContext<RoomSignals | null>(null);
  */
 export function RoomSignalsProvider({
   localIdentity,
+  room,
   children,
 }: {
   localIdentity: string;
+  room: RoomDto;
   children: React.ReactNode;
 }) {
+  // Les verrous vivent ici plutôt que dans chaque composant : une seule écoute
+  // des métadonnées de salle, et pas de RoomDto à faire descendre jusqu'au chat.
+  const locks = useRoomLocks(room);
   const { raisedHands, isRaised, toggle, lower, lowerAll } = useHandRaiseState(localIdentity);
-  const { reactions, send } = useReactionsState();
+  const { reactions, send } = useReactionsState(locks.reactionsLocked);
 
   const value = useMemo<RoomSignals>(
     () => ({
@@ -316,8 +335,9 @@ export function RoomSignalsProvider({
       lowerAllHands: lowerAll,
       reactions,
       sendReaction: send,
+      locks,
     }),
-    [raisedHands, isRaised, toggle, lower, lowerAll, reactions, send]
+    [raisedHands, isRaised, toggle, lower, lowerAll, reactions, send, locks]
   );
 
   return createElement(RoomSignalsContext.Provider, { value }, children);

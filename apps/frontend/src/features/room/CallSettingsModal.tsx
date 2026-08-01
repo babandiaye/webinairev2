@@ -159,6 +159,29 @@ export function CallSettingsModal({
               busy={busy}
               onChange={(cameraLocked) => updateSettings({ cameraLocked })}
             />
+            {/* Verrous d'interaction : contrairement aux deux du dessus, ils ne
+                se traduisent par aucune permission LiveKit et sont appliqués par
+                les clients (émission masquée ET réception filtrée) — voir
+                RoomLocksMetadata. Défaut : ouvert, ce sont des mesures
+                ponctuelles, pas le régime normal d'un cours. */}
+            <LockToggle
+              label="Verrouiller la discussion"
+              locked={room.chatLocked}
+              busy={busy}
+              onChange={(chatLocked) => updateSettings({ chatLocked })}
+            />
+            <LockToggle
+              label="Verrouiller les réactions"
+              locked={room.reactionsLocked}
+              busy={busy}
+              onChange={(reactionsLocked) => updateSettings({ reactionsLocked })}
+            />
+            <LockToggle
+              label="Masquer la liste des participants"
+              locked={room.participantListLocked}
+              busy={busy}
+              onChange={(participantListLocked) => updateSettings({ participantListLocked })}
+            />
             <div className="call-settings-actions">
               <button
                 className="call-settings-action-btn"

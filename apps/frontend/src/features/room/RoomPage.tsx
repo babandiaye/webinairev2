@@ -265,7 +265,7 @@ export function RoomPage() {
           qui le consulte à la 40e minute ne verrait rien des 40 premières.
           Ne provoque aucun rendu de ses enfants (voir useEngagementStats). */}
       <EngagementProvider enabled={canManage}>
-      <RoomSignalsProvider localIdentity={user.id}>
+      <RoomSignalsProvider localIdentity={user.id} room={activeConnection.room}>
       <CallSideNav
         canManage={canManage}
         isInBreakout={isInBreakout}

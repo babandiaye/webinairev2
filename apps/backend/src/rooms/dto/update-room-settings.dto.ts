@@ -8,4 +8,16 @@ export class UpdateRoomSettingsDto {
   @IsOptional()
   @IsBoolean()
   cameraLocked?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  chatLocked?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  reactionsLocked?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  participantListLocked?: boolean;
 }

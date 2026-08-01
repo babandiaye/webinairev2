@@ -225,6 +225,9 @@ export class BreakoutRoomsService {
       isMoodle: room.moodleMeetingId !== null,
       micLocked: room.micLocked,
       cameraLocked: room.cameraLocked,
+      chatLocked: room.chatLocked,
+      reactionsLocked: room.reactionsLocked,
+      participantListLocked: room.participantListLocked,
     };
   }
 }
