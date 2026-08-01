@@ -1,9 +1,23 @@
-import { Controller, Get, Req, Res } from "@nestjs/common";
+import { Controller, Get, Query, Req, Res } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { Request, Response } from "express";
 import { generators } from "openid-client";
 import { OidcClientService } from "./oidc-client.service";
 import { UserSyncService } from "./user-sync.service";
+
+// N'accepte qu'un chemin INTERNE, jamais une URL absolue : sans ce filtre,
+// /auth/login?redirect=https://ailleurs deviendrait une redirection ouverte
+// signée par notre domaine, exactement le genre de lien qu'on utilise pour
+// rendre crédible un hameçonnage.
+// Les deux cas particuliers écartés en plus du préfixe "/" :
+//  - "//ailleurs.example" est une URL *protocol-relative*, que le navigateur
+//    résout comme https://ailleurs.example ;
+//  - "/\ailleurs.example" est traité comme "//" par plusieurs navigateurs.
+function sanitizeInternalPath(raw?: string): string | undefined {
+  if (!raw || !raw.startsWith("/")) return undefined;
+  if (raw.startsWith("//") || raw.startsWith("/\\")) return undefined;
+  return raw;
+}
 
 @Controller("auth")
 export class AuthController {
@@ -13,11 +27,17 @@ export class AuthController {
     private readonly config: ConfigService
   ) {}
 
+  // `redirect` = chemin interne où revenir une fois Keycloak repassé. Sans lui,
+  // le callback ramenait TOUJOURS à l'accueil : un lien profond vers une salle
+  // (celui que le plugin Moodle envoie depuis launch.php) était perdu dès que
+  // l'utilisateur n'avait pas encore de session, et il atterrissait sur la liste
+  // des salles au lieu de la sienne.
   @Get("login")
-  login(@Req() req: Request, @Res() res: Response) {
+  login(@Req() req: Request, @Res() res: Response, @Query("redirect") redirect?: string) {
     const state = generators.state();
     const nonce = generators.nonce();
     req.session.oauthState = { state, nonce };
+    req.session.postLoginRedirect = sanitizeInternalPath(redirect);
 
     const url = this.oidc.getClient().authorizationUrl({
       scope: "openid profile email",
@@ -66,6 +86,11 @@ export class AuthController {
 
     delete req.session.oauthState;
 
+    // Consommé quoi qu'il arrive : un chemin laissé en session survivrait à la
+    // tentative et détournerait une connexion ultérieure sans rapport.
+    const postLoginPath = req.session.postLoginRedirect;
+    delete req.session.postLoginRedirect;
+
     // Compte désactivé par un admin (voir UsersService.setActive) : on refuse la
     // création de session ici — SessionStoreService a déjà révoqué toute session
     // existante au moment de la désactivation, mais sans ce contrôle un compte
@@ -84,7 +109,8 @@ export class AuthController {
       role: user.role,
     };
 
-    res.redirect(this.config.get<string>("frontendUrl")!);
+    const frontendUrl = this.config.get<string>("frontendUrl")!;
+    res.redirect(postLoginPath ? `${frontendUrl}${postLoginPath}` : frontendUrl);
   }
 
   @Get("logout")

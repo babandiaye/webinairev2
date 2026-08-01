@@ -14,7 +14,7 @@ export class MoodleController {
 
   @Post("rooms")
   createRoom(@Body() dto: CreateMoodleRoomDto) {
-    return this.moodle.createOrGetRoom(dto);
+    return this.moodle.createRoom(dto);
   }
 
   @Get("rooms/:roomId/status")

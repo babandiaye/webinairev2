@@ -83,6 +83,12 @@ export interface JoinRoomResponseDto {
   room: RoomDto;
   livekitUrl: string;
   token: string;
+  // Page d'où l'utilisateur est parti (activité Moodle), où le renvoyer en fin
+  // de séance. null pour une salle créée directement sur webinairev2.
+  // Vient de la salle, jamais de la barre d'adresse : ce backend sert plusieurs
+  // plateformes Moodle, chacune avec son domaine, et aucune liste blanche n'a
+  // donc à être configurée au build du frontend.
+  returnUrl: string | null;
 }
 
 export interface UserDto {
@@ -264,12 +270,10 @@ export interface MoodleRecordingDto {
   name: string;
   date: string;
   duration: number | null;
-  sizeBytes: number | null;
-  // Même ressource, même jeton signé : `playUrl` porte `inline=1` (lecture dans
-  // un <video>), `downloadUrl` non (Content-Disposition: attachment). Voir
-  // RecordingsController.download.
+  // Jeton signé et expirant, avec `inline=1` : le plugin déplie un <video> dans
+  // la page Moodle. Pas de lien de téléchargement séparé — les contrôles natifs
+  // du lecteur l'offrent déjà (mise en page alignée sur mod_livestream).
   playUrl: string;
-  downloadUrl: string;
 }
 
 // Le plugin Moodle pagine côté serveur : une activité de cours peut accumuler

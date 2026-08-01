@@ -34,8 +34,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const value: AuthContextValue = {
     user,
     isLoading,
+    // Transmet la page en cours pour y revenir après Keycloak. Sans ça, un lien
+    // profond ouvert sans session (typiquement une salle lancée depuis Moodle)
+    // ramenait à l'accueil : l'utilisateur devait retrouver sa salle à la main,
+    // et le paramètre returnUrl qui l'accompagne était perdu en route.
+    // Le backend n'accepte que des chemins internes (voir sanitizeInternalPath).
     login: () => {
-      window.location.href = `${API_URL}/auth/login`;
+      const target = window.location.pathname + window.location.search + window.location.hash;
+      window.location.href = `${API_URL}/auth/login?redirect=${encodeURIComponent(target)}`;
     },
     logout: () => {
       window.location.href = `${API_URL}/auth/logout`;

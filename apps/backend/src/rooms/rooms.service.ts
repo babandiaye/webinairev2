@@ -146,6 +146,12 @@ export class RoomsService {
       room: this.toDto(room, isModerator),
       livekitUrl: this.config.get<string>("livekit.wsUrlPublic")!,
       token,
+      // Renseignée uniquement pour une salle d'origine Moodle : le frontend y
+      // renvoie l'utilisateur en fin de séance, plutôt que de le laisser sur
+      // l'accueil de webinairev2 sans chemin de retour vers son cours. Portée
+      // par la salle et non par l'URL — plusieurs plateformes Moodle partagent
+      // ce backend, chacune avec son propre domaine.
+      returnUrl: room.moodleReturnUrl,
     };
   }
 

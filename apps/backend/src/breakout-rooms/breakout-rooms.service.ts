@@ -147,6 +147,11 @@ export class BreakoutRoomsService {
       room: this.toRoomDto(breakout, isManager),
       livekitUrl: this.config.get<string>("livekit.wsUrlPublic")!,
       token,
+      // Toujours null : un sous-groupe n'a pas d'activité Moodle propre, et on
+      // n'en sort pas vers Moodle mais vers la salle principale. Le retour de
+      // fin de séance est porté par la connexion principale (voir RoomPage, qui
+      // lit mainConnection.returnUrl et non activeConnection).
+      returnUrl: null,
     };
   }
 

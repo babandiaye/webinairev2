@@ -97,6 +97,7 @@ export function RoomPage() {
     localStorage.setItem(SPEAKER_MUTED_KEY, speakerMuted ? "1" : "0");
   }, [speakerMuted]);
 
+
   useEffect(() => {
     if (!id) return;
     let cancelled = false;
@@ -255,6 +256,20 @@ export function RoomPage() {
       onDisconnected={() => {
         if (switchingRef.current) {
           switchingRef.current = false;
+          return;
+        }
+        // Séance lancée depuis Moodle : on rend la main à la page de l'activité
+        // d'où l'utilisateur est parti, au lieu de le laisser sur l'accueil de
+        // webinairev2 sans chemin de retour vers son cours.
+        // La valeur vient de la SALLE (mainConnection, pas activeConnection :
+        // en sous-groupe cette dernière désigne une autre Room), transmise
+        // serveur-à-serveur par le plugin — jamais lue dans la barre d'adresse,
+        // donc pas de redirection ouverte à filtrer ici.
+        // `replace` et non `href` : le bouton Précédent ne doit pas renvoyer
+        // dans une salle qu'on vient de quitter.
+        const returnUrl = mainConnection?.returnUrl;
+        if (returnUrl) {
+          window.location.replace(returnUrl);
           return;
         }
         navigate("/");

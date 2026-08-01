@@ -1,4 +1,4 @@
-import { IsBoolean, IsEmail, IsOptional, IsString, MinLength } from "class-validator";
+import { IsBoolean, IsEmail, IsOptional, IsString, IsUrl, MinLength } from "class-validator";
 
 export class SyncMoodleUserDto {
   @IsEmail()
@@ -20,4 +20,11 @@ export class SyncMoodleUserDto {
   @IsOptional()
   @IsString()
   roomId?: string;
+
+  // Page d'activité Moodle où renvoyer l'utilisateur en fin de séance. Renvoyée
+  // à chaque affichage de l'activité : rattrape les salles créées avant
+  // l'existence du champ et suit un déplacement de l'activité.
+  @IsOptional()
+  @IsUrl({ require_protocol: true })
+  returnUrl?: string;
 }

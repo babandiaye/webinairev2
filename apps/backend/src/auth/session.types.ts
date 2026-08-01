@@ -14,5 +14,8 @@ declare module "express-session" {
     user?: SessionUser;
     idToken?: string;
     oauthState?: { state: string; nonce: string };
+    // Chemin interne où revenir après le retour de Keycloak — toujours relatif,
+    // jamais une URL absolue (voir AuthController.sanitizeInternalPath).
+    postLoginRedirect?: string;
   }
 }

@@ -100,12 +100,25 @@ model Room {
   chatLocked             Boolean    @default(false)
   reactionsLocked        Boolean    @default(false)
   participantListLocked  Boolean    @default(false)
-  // Rempli uniquement pour une Room créée depuis le plugin Moodle (mod_webinairev2) —
-  // moodleMeetingId identifie l'instance d'activité de façon unique et sert de clé
-  // d'idempotence (POST /moodle/rooms ne doit jamais créer deux Room pour la même
-  // activité rappelée plusieurs fois).
+  // Rempli uniquement pour une Room créée depuis le plugin Moodle (mod_webinairev2).
+  //
+  // MÉTADONNÉES DE PROVENANCE UNIQUEMENT — jamais une clé de réutilisation, et
+  // surtout pas @unique. moodleMeetingId est l'id de la ligne `webinairev2`, qui
+  // n'est unique qu'au sein d'UN Moodle : ce backend étant partagé par plusieurs
+  // plateformes, l'activité n°1 de disi-dev et l'activité n°1 d'un autre Moodle
+  // portent le même identifiant. Chercher une salle existante par ce champ les
+  // rattachait à la même Room. livestreamv3 a vécu exactement cet incident le
+  // 27/07/2026 (« TEST Integration DISIDEV » rattachée à « Introduction au
+  // droit ») et a retiré la contrainte pour la même raison.
+  // L'idempotence est garantie CÔTÉ PLUGIN : createRoom n'est appelé qu'à la
+  // création de l'activité (webinairev2_add_instance), jamais à l'affichage.
   moodleCourseId        String?
-  moodleMeetingId        String?    @unique
+  moodleMeetingId       String?
+  // URL de la page d'activité Moodle d'origine, transmise serveur-à-serveur par
+  // le plugin (jamais par la barre d'adresse) : c'est là que la salle renvoie
+  // l'utilisateur en fin de séance. Chaque salle porte celle de SA plateforme,
+  // ce qui règle le retour pour N Moodle sans aucune liste blanche à configurer.
+  moodleReturnUrl       String?
   recordings            Recording[]
   polls                 Poll[]
   presentations         Presentation[]
@@ -116,6 +129,9 @@ model Room {
   updatedAt             DateTime   @updatedAt
 
   @@index([parentRoomId])
+  // Index simple, jamais unique (voir moodleMeetingId ci-dessus) : sert au
+  // diagnostic « quelle salle vient de quelle activité », pas à la réutilisation.
+  @@index([moodleMeetingId])
   @@map("rooms")
 }
 

@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { randomUUID } from "crypto";
-import { Prisma, RecordingStatus, Role, Room } from "@prisma/client";
+import { RecordingStatus, Role } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
 import { LiveKitClientsService } from "../livekit/livekit-clients.service";
 import { RecordingsService } from "../recordings/recordings.service";
@@ -30,6 +30,21 @@ const MOODLE_PLAY_LINK_TTL_SECONDS = 30 * 60;
 const RECORDINGS_DEFAULT_PER_PAGE = 10;
 const RECORDINGS_MAX_PER_PAGE = 100;
 
+// L'URL de retour finit dans un window.location du navigateur : on n'y laisse
+// passer que du http(s). L'appel est authentifié par clé API (donc de confiance),
+// mais cette clé est partagée entre toutes les plateformes Moodle branchées sur
+// ce backend — une valeur aberrante venue de l'une d'elles ne doit pas devenir
+// un javascript: exécuté chez les utilisateurs d'une autre.
+function sanitizeReturnUrl(raw?: string): string | null {
+  if (!raw) return null;
+  try {
+    const parsed = new URL(raw);
+    return parsed.protocol === "https:" || parsed.protocol === "http:" ? raw : null;
+  } catch {
+    return null;
+  }
+}
+
 @Injectable()
 export class MoodleService {
   constructor(
@@ -41,18 +56,21 @@ export class MoodleService {
     private readonly config: ConfigService
   ) {}
 
-  async createOrGetRoom(dto: CreateMoodleRoomDto): Promise<MoodleRoomDto> {
+  // Crée TOUJOURS une salle neuve, identifiée par le cuid généré ici.
+  //
+  // Ne cherche JAMAIS une salle existante par moodleMeetingId : cet identifiant
+  // est l'id de la ligne `webinairev2`, unique au sein d'UNE plateforme Moodle
+  // seulement. Ce backend en sert plusieurs — l'activité n°1 de disi-dev et
+  // l'activité n°1 d'un autre Moodle portaient le même identifiant et se
+  // retrouvaient rattachées à la même salle. livestreamv3 a subi exactement cet
+  // incident le 27/07/2026 et a supprimé la même logique.
+  //
+  // L'idempotence — ne pas recréer une salle pour une activité qui en a déjà
+  // une — est garantie CÔTÉ PLUGIN : webinairev2_add_instance est le seul
+  // appelant, et il ne s'exécute qu'à la création de l'activité. L'affichage de
+  // l'activité (view.php) ne crée jamais rien.
+  async createRoom(dto: CreateMoodleRoomDto): Promise<MoodleRoomDto> {
     const frontendUrl = this.config.get<string>("frontendUrl")!;
-    const toDto = (room: Room): MoodleRoomDto => ({
-      roomId: room.id,
-      roomName: room.roomName,
-      title: room.title,
-      status: room.status,
-      joinUrl: `${frontendUrl}/rooms/${room.id}`,
-    });
-
-    const existing = await this.prisma.room.findUnique({ where: { moodleMeetingId: dto.meetingId } });
-    if (existing) return toDto(existing);
 
     // Un enseignant Moodle peut ne s'être jamais connecté à webinairev2 au moment où
     // Moodle crée l'activité côté serveur (pas de session Keycloak disponible ici) —
@@ -65,31 +83,24 @@ export class MoodleService {
 
     await this.livekitClients.roomService.createRoom({ name: roomName, emptyTimeout: 300 });
 
-    try {
-      const room = await this.prisma.room.create({
-        data: {
-          roomName,
-          title: dto.title,
-          creatorId: teacher.id,
-          moodleCourseId: dto.courseId,
-          moodleMeetingId: dto.meetingId,
-        },
-      });
-      return toDto(room);
-    } catch (e) {
-      // Deux appels concurrents du plugin pour la même activité (retry Moodle,
-      // double soumission) passent tous les deux le findUnique ci-dessus avant
-      // que le premier n'ait committé : le perdant viole la contrainte unique
-      // sur moodleMeetingId. L'idempotence promise par le schéma exige de
-      // renvoyer la salle gagnante, pas une 500 au plugin.
-      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
-        const winner = await this.prisma.room.findUnique({
-          where: { moodleMeetingId: dto.meetingId },
-        });
-        if (winner) return toDto(winner);
-      }
-      throw e;
-    }
+    const room = await this.prisma.room.create({
+      data: {
+        roomName,
+        title: dto.title,
+        creatorId: teacher.id,
+        moodleCourseId: dto.courseId,
+        moodleMeetingId: dto.meetingId,
+        moodleReturnUrl: sanitizeReturnUrl(dto.returnUrl),
+      },
+    });
+
+    return {
+      roomId: room.id,
+      roomName: room.roomName,
+      title: room.title,
+      status: room.status,
+      joinUrl: `${frontendUrl}/rooms/${room.id}`,
+    };
   }
 
   async getStatus(roomId: string): Promise<MoodleRoomStatusDto> {
@@ -126,17 +137,12 @@ export class MoodleService {
       recordings: recordings.map((r): MoodleRecordingDto => {
         const exp = Math.floor(Date.now() / 1000) + MOODLE_PLAY_LINK_TTL_SECONDS;
         const token = signDownloadToken({ resourceId: r.id, exp }, secret);
-        const base = `${frontendUrl}/api/recordings/download?token=${encodeURIComponent(token)}`;
         return {
           id: r.id,
           name: r.filename,
           date: r.createdAt.toISOString(),
           duration: r.duration,
-          // BigInt n'est pas sérialisable en JSON — Number est exact jusqu'à
-          // 2^53 octets (9 Po), sans commune mesure avec un enregistrement.
-          sizeBytes: r.size === null ? null : Number(r.size),
-          playUrl: `${base}&inline=1`,
-          downloadUrl: base,
+          playUrl: `${frontendUrl}/api/recordings/download?token=${encodeURIComponent(token)}&inline=1`,
         };
       }),
     };
@@ -169,7 +175,21 @@ export class MoodleService {
 
     if (dto.roomId) {
       const room = await this.prisma.room.findUnique({ where: { id: dto.roomId } });
-      if (room) await this.enrollments.ensureEnrolled(room.id, user.id, "moodle-sync");
+      if (room) {
+        await this.enrollments.ensureEnrolled(room.id, user.id, "moodle-sync");
+
+        // Rafraîchit l'URL de retour à chaque affichage de l'activité. C'est ce
+        // qui rattrape les salles créées avant l'existence du champ, et ce qui
+        // suit un déplacement de l'activité (le cmid change, l'URL aussi) sans
+        // appel supplémentaire : le plugin passe déjà par ici à chaque vue.
+        const returnUrl = sanitizeReturnUrl(dto.returnUrl);
+        if (returnUrl && returnUrl !== room.moodleReturnUrl) {
+          await this.prisma.room.update({
+            where: { id: room.id },
+            data: { moodleReturnUrl: returnUrl },
+          });
+        }
+      }
     }
 
     return { userId: user.id, role: user.role };
