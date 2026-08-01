@@ -1,7 +1,7 @@
 import { Body, Controller, Get, Param, Post, UseGuards } from "@nestjs/common";
 import { SessionAuthGuard } from "../auth/session-auth.guard";
 import { RolesGuard } from "../auth/roles.guard";
-import { RoomAccessGuard, RequireRoomAccess } from "../rooms/room-access.guard";
+import { RoomAccessGuard, RequireRoomAccess, RequireRoomView } from "../rooms/room-access.guard";
 import { CurrentUser } from "../auth/current-user.decorator";
 import { SessionUser } from "../auth/session.types";
 import { PollsService } from "./polls.service";
@@ -14,6 +14,7 @@ export class PollsController {
   constructor(private readonly polls: PollsService) {}
 
   @Get()
+  @RequireRoomView()
   list(@Param("roomId") roomId: string, @CurrentUser() user: SessionUser) {
     return this.polls.list(roomId, user.id);
   }
@@ -44,7 +45,12 @@ export class PollsController {
     return { ok: true };
   }
 
+  // Voter est ouvert aux simples inscrits (RequireRoomView, pas
+  // RequireRoomAccess) — mais PAS à n'importe quel utilisateur authentifié de
+  // la plateforme, comme c'était le cas avant : cette route était la seule
+  // action mutante liée à une salle sans aucun contrôle d'accès.
   @Post(":pollId/vote")
+  @RequireRoomView()
   async vote(
     @Param("roomId") roomId: string,
     @Param("pollId") pollId: string,

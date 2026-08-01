@@ -14,6 +14,11 @@ import { signDownloadToken } from "../common/download-token.util";
 const execFileAsync = promisify(execFile);
 const SLIDE_LINK_TTL_SECONDS = 60 * 60; // durée d'une session de présentation raisonnable
 
+// Au-delà, une conversion encore CONVERTING ne peut plus être qu'un orphelin
+// (processus perdu au redémarrage) : une conversion réelle de PDF, même
+// volumineux, se compte en dizaines de secondes.
+const STUCK_CONVERSION_THRESHOLD_MS = 10 * 60 * 1000;
+
 // Évite une dépendance directe sur @types/multer (non installé) : on ne consomme
 // que la forme du fichier réellement utilisée, fournie en mémoire par multer.
 export interface UploadedPdfFile {
@@ -105,6 +110,25 @@ export class PresentationsService {
     } finally {
       await rm(workDir, { recursive: true, force: true });
     }
+  }
+
+  // La conversion tourne dans une promesse détachée en mémoire (voir upload()) :
+  // un redémarrage du backend pendant un pdftoppm laisse la ligne bloquée en
+  // CONVERTING pour toujours, et activate() la refusera à jamais (il exige
+  // READY). Même filet de sécurité que pour les enregistrements bloqués
+  // (EgressReconciliationService.reconcileStuckRecordings) : au-delà du seuil,
+  // on marque FAILED pour que l'utilisateur voie l'échec et puisse réimporter,
+  // au lieu d'un statut "en cours" mensonger et définitif.
+  async failStuckConversions(): Promise<number> {
+    const threshold = new Date(Date.now() - STUCK_CONVERSION_THRESHOLD_MS);
+    const { count } = await this.prisma.presentation.updateMany({
+      where: { status: PresentationStatus.CONVERTING, createdAt: { lt: threshold } },
+      data: { status: PresentationStatus.FAILED },
+    });
+    if (count > 0) {
+      this.logger.warn(`${count} conversion(s) de présentation bloquée(s) marquée(s) FAILED`);
+    }
+    return count;
   }
 
   // Les présentations importées sont propres à la session qui les a

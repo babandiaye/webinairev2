@@ -1,7 +1,7 @@
 import { Body, Controller, Get, Param, Put, UseGuards } from "@nestjs/common";
 import { SessionAuthGuard } from "../auth/session-auth.guard";
 import { RolesGuard } from "../auth/roles.guard";
-import { RoomAccessGuard, RequireRoomAccess } from "../rooms/room-access.guard";
+import { RoomAccessGuard, RequireRoomAccess, RequireRoomView } from "../rooms/room-access.guard";
 import { WhiteboardService } from "./whiteboard.service";
 import { SaveWhiteboardDto } from "./dto/save-whiteboard.dto";
 import { SetWhiteboardStateDto } from "./dto/set-whiteboard-state.dto";
@@ -17,6 +17,7 @@ export class WhiteboardController {
   constructor(private readonly whiteboard: WhiteboardService) {}
 
   @Get()
+  @RequireRoomView()
   get(@Param("roomId") roomId: string) {
     return this.whiteboard.get(roomId);
   }
@@ -32,6 +33,7 @@ export class WhiteboardController {
   // simple état d'affichage local — sinon les participants ne voient jamais le
   // tableau blanc apparaître quand le modérateur l'ouvre.
   @Get("state")
+  @RequireRoomView()
   getState(@Param("roomId") roomId: string) {
     return this.whiteboard.getOpenState(roomId);
   }

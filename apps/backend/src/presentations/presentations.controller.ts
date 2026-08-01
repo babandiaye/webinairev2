@@ -17,7 +17,7 @@ import { Response } from "express";
 import { ConfigService } from "@nestjs/config";
 import { SessionAuthGuard } from "../auth/session-auth.guard";
 import { RolesGuard } from "../auth/roles.guard";
-import { RoomAccessGuard, RequireRoomAccess } from "../rooms/room-access.guard";
+import { RoomAccessGuard, RequireRoomAccess, RequireRoomView } from "../rooms/room-access.guard";
 import { CurrentUser } from "../auth/current-user.decorator";
 import { SessionUser } from "../auth/session.types";
 import { PresentationsService, UploadedPdfFile } from "./presentations.service";
@@ -33,16 +33,19 @@ export class PresentationsController {
   constructor(private readonly presentations: PresentationsService) {}
 
   @Get()
+  @RequireRoomView()
   list(@Param("roomId") roomId: string) {
     return this.presentations.list(roomId);
   }
 
   @Get("active")
+  @RequireRoomView()
   active(@Param("roomId") roomId: string) {
     return this.presentations.getActive(roomId);
   }
 
   @Get(":id")
+  @RequireRoomView()
   getOne(@Param("roomId") roomId: string, @Param("id") id: string) {
     return this.presentations.getOne(roomId, id);
   }

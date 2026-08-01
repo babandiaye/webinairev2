@@ -2236,6 +2236,35 @@ button.stat-card:hover {
   font-size: 0.78rem;
   color: var(--color-danger);
 }
+.call-action-error {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: min(90%, 520px);
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: var(--color-danger);
+  color: #fff;
+  font-size: 0.85rem;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+}
+.call-action-error button {
+  display: inline-flex;
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  padding: 0;
+  opacity: 0.8;
+}
+.call-action-error button:hover {
+  opacity: 1;
+}
 .call-settings-actions {
   display: flex;
   flex-direction: column;

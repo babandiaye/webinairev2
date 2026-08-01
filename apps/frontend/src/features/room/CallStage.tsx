@@ -109,12 +109,20 @@ export function CallStage({ canManage = true }: { canManage?: boolean }) {
   // personnes peuvent avoir la parole en même temps (voir
   // setSpeakerPermission), et un flux audio coûte quelques dizaines de kbps —
   // rien à voir avec le coût d'une piste vidéo en plus.
-  const micTracks = useTracks([Track.Source.Microphone], { onlySubscribed: false });
+  // ScreenShareAudio inclus : setPresenterPermission accorde SCREEN_SHARE_AUDIO
+  // en même temps que SCREEN_SHARE côté serveur. L'app ne capture pas encore
+  // cette piste (le toggle de partage d'écran ne passe pas captureOptions.audio,
+  // et livekit-client met audio:false par défaut), mais l'omettre ici serait
+  // exactement la même faille que le micro : silencieuse jusqu'au jour où
+  // quelqu'un active la capture audio de l'écran.
+  const audioTracks = useTracks([Track.Source.Microphone, Track.Source.ScreenShareAudio], {
+    onlySubscribed: false,
+  });
   const subscribedAudioRef = useRef<Set<RemoteTrackPublication>>(new Set());
   useEffect(() => {
     if (canManage) return;
     const nextPubs = new Set(
-      micTracks.filter((t) => !t.participant.isLocal).map((t) => t.publication as RemoteTrackPublication)
+      audioTracks.filter((t) => !t.participant.isLocal).map((t) => t.publication as RemoteTrackPublication)
     );
     for (const pub of subscribedAudioRef.current) {
       if (!nextPubs.has(pub)) pub.setSubscribed(false);
@@ -123,7 +131,7 @@ export function CallStage({ canManage = true }: { canManage?: boolean }) {
       if (!subscribedAudioRef.current.has(pub)) pub.setSubscribed(true);
     }
     subscribedAudioRef.current = nextPubs;
-  }, [canManage, micTracks]);
+  }, [canManage, audioTracks]);
 
   const localRole: Role | undefined = (() => {
     try {

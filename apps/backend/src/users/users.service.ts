@@ -72,6 +72,16 @@ export class UsersService {
       data: { role },
       include: { _count: { select: { createdRooms: true } } },
     });
+
+    // req.session.user (lu par SessionAuthGuard à chaque requête) est une copie
+    // figée à la connexion, jamais rafraîchie — sans cette révocation, une
+    // session déjà ouverte garderait l'ancien rôle (donc ses anciens
+    // privilèges, ex. MODERATOR rétrogradé en VIEWER) jusqu'à ce que
+    // l'utilisateur se déconnecte lui-même. Même logique que setActive()
+    // ci-dessous, appliquée ici à TOUT changement de rôle, pas seulement une
+    // désactivation.
+    await this.sessionStore.revokeUserSessions(targetId);
+
     return this.toDto(user);
   }
 

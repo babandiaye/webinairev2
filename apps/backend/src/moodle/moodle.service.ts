@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { randomUUID } from "crypto";
-import { RecordingStatus, Role } from "@prisma/client";
+import { Prisma, RecordingStatus, Role, Room } from "@prisma/client";
 import { PrismaService } from "../prisma/prisma.service";
 import { LiveKitClientsService } from "../livekit/livekit-clients.service";
 import { RecordingsService } from "../recordings/recordings.service";
@@ -35,18 +35,17 @@ export class MoodleService {
   ) {}
 
   async createOrGetRoom(dto: CreateMoodleRoomDto): Promise<MoodleRoomDto> {
-    const existing = await this.prisma.room.findUnique({ where: { moodleMeetingId: dto.meetingId } });
     const frontendUrl = this.config.get<string>("frontendUrl")!;
+    const toDto = (room: Room): MoodleRoomDto => ({
+      roomId: room.id,
+      roomName: room.roomName,
+      title: room.title,
+      status: room.status,
+      joinUrl: `${frontendUrl}/rooms/${room.id}`,
+    });
 
-    if (existing) {
-      return {
-        roomId: existing.id,
-        roomName: existing.roomName,
-        title: existing.title,
-        status: existing.status,
-        joinUrl: `${frontendUrl}/rooms/${existing.id}`,
-      };
-    }
+    const existing = await this.prisma.room.findUnique({ where: { moodleMeetingId: dto.meetingId } });
+    if (existing) return toDto(existing);
 
     // Un enseignant Moodle peut ne s'être jamais connecté à webinairev2 au moment où
     // Moodle crée l'activité côté serveur (pas de session Keycloak disponible ici) —
@@ -59,23 +58,31 @@ export class MoodleService {
 
     await this.livekitClients.roomService.createRoom({ name: roomName, emptyTimeout: 300 });
 
-    const room = await this.prisma.room.create({
-      data: {
-        roomName,
-        title: dto.title,
-        creatorId: teacher.id,
-        moodleCourseId: dto.courseId,
-        moodleMeetingId: dto.meetingId,
-      },
-    });
-
-    return {
-      roomId: room.id,
-      roomName: room.roomName,
-      title: room.title,
-      status: room.status,
-      joinUrl: `${frontendUrl}/rooms/${room.id}`,
-    };
+    try {
+      const room = await this.prisma.room.create({
+        data: {
+          roomName,
+          title: dto.title,
+          creatorId: teacher.id,
+          moodleCourseId: dto.courseId,
+          moodleMeetingId: dto.meetingId,
+        },
+      });
+      return toDto(room);
+    } catch (e) {
+      // Deux appels concurrents du plugin pour la même activité (retry Moodle,
+      // double soumission) passent tous les deux le findUnique ci-dessus avant
+      // que le premier n'ait committé : le perdant viole la contrainte unique
+      // sur moodleMeetingId. L'idempotence promise par le schéma exige de
+      // renvoyer la salle gagnante, pas une 500 au plugin.
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
+        const winner = await this.prisma.room.findUnique({
+          where: { moodleMeetingId: dto.meetingId },
+        });
+        if (winner) return toDto(winner);
+      }
+      throw e;
+    }
   }
 
   async getStatus(roomId: string): Promise<MoodleRoomStatusDto> {

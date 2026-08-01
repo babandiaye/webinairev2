@@ -18,7 +18,7 @@ import { RolesGuard } from "../auth/roles.guard";
 import { RequireRole } from "../auth/roles.decorator";
 import { CurrentUser } from "../auth/current-user.decorator";
 import { SessionUser } from "../auth/session.types";
-import { RoomAccessGuard, RequireRoomAccess } from "../rooms/room-access.guard";
+import { RoomAccessGuard, RequireRoomAccess, RequireRoomView } from "../rooms/room-access.guard";
 import { RecordingsService } from "./recordings.service";
 import { PrismaService } from "../prisma/prisma.service";
 import { S3Service } from "../storage/s3.service";
@@ -31,6 +31,7 @@ export class RoomRecordingsController {
   constructor(private readonly recordings: RecordingsService) {}
 
   @Get()
+  @RequireRoomView()
   list(@Param("roomId") roomId: string) {
     return this.recordings.list(roomId);
   }

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { LiveKitRoom, RoomAudioRenderer, StartAudio } from "@livekit/components-react";
+import { X } from "lucide-react";
 import "@livekit/components-styles";
 import { JoinRoomResponseDto } from "@webinairev2/shared-types";
 import { api } from "../../api/client";
@@ -39,7 +40,13 @@ export function RoomPage() {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [mobileSideNavOpen, setMobileSideNavOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  // Deux états distincts : `error` est FATAL (échec de la connexion initiale —
+  // remplace toute la page), `actionError` signale l'échec d'une action pendant
+  // l'appel (rejoindre un sous-groupe, ouvrir le tableau blanc) et s'affiche en
+  // bandeau temporaire. Les confondre déconnectait l'utilisateur de l'appel en
+  // cours pour une simple action ratée, sans aucun retour possible.
   const [error, setError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [waitingForModerator, setWaitingForModerator] = useState(false);
   // Distingue un vrai départ (bouton "quitter", → retour à l'accueil) d'un
   // changement de salle déclenché par nous (breakout ↔ principale, → on ne doit
@@ -112,7 +119,7 @@ export function RoomPage() {
       setActiveConnection(conn);
       setActivePanel(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Erreur inconnue");
+      setActionError(e instanceof Error ? e.message : "Erreur inconnue");
     }
   }
 
@@ -128,7 +135,7 @@ export function RoomPage() {
       // Le tableau blanc est une session partagée (ouverte pour tout le monde),
       // pas un panneau d'affichage local — voir Whiteboard.tsx.
       api.setWhiteboardState(activeConnection!.room.id, { open: true }).catch((e) => {
-        setError(e instanceof Error ? e.message : "Erreur inconnue");
+        setActionError(e instanceof Error ? e.message : "Erreur inconnue");
       });
       return;
     }
@@ -202,6 +209,15 @@ export function RoomPage() {
 
         <div className="call-stage-wrapper">
           <CallStage canManage={canManage} />
+
+          {actionError && (
+            <div className="call-action-error">
+              <span>{actionError}</span>
+              <button onClick={() => setActionError(null)} aria-label="Fermer">
+                <X size={15} />
+              </button>
+            </div>
+          )}
 
           {isInBreakout && (
             <BreakoutReturnBar title={activeConnection.room.title} onReturn={handleReturnToMain} />
