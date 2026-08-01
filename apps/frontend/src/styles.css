@@ -3206,3 +3206,19 @@ button.stat-card:hover {
   color: rgba(255, 255, 255, 0.6);
   font-size: 0.78rem;
 }
+
+/* Signale à l'animateur que l'instantané serveur ne part plus. Discret et non
+   bloquant : son dessin reste diffusé en direct, seul un participant qui
+   rejoindrait maintenant serait pénalisé — c'est un avertissement, pas une
+   erreur qui doit interrompre le cours. */
+.whiteboard-save-warning {
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  color: var(--color-warning);
+  background: rgba(226, 132, 35, 0.16);
+  border: 1px solid rgba(226, 132, 35, 0.4);
+  border-radius: var(--radius);
+  padding: 3px 9px;
+  cursor: help;
+}

@@ -21,7 +21,21 @@ async function bootstrap() {
   // le body-parser JSON par défaut de Nest (qui ne matche que application/json)
   // ignore silencieusement ces requêtes et req.rawBody reste vide. On enregistre
   // un second parser JSON qui matche aussi ce content-type spécifique.
-  app.useBodyParser("json", { type: ["application/json", "application/webhook+json"] });
+  // limit explicite : le défaut d'Express est 100 Ko, ce qui suffisait pour tout
+  // SAUF l'instantané du tableau blanc — une scène Excalidraw pèse ~2,75 Ko par
+  // trait à main levée, donc franchissait ce plafond au bout d'environ 35 traits
+  // (deux à trois minutes d'écriture). Passé ce seuil, PUT /rooms/:id/whiteboard
+  // répondait 413 et l'instantané serveur restait figé pour le reste de la
+  // séance : tout participant rejoignant ensuite recevait un tableau incomplet,
+  // sans que rien ne le signale (l'appel était avalé par un .catch vide côté
+  // client, corrigé en même temps). Constaté en production le 2026-08-01 :
+  // dernier enregistrement réussi à 98,6 Ko, tous les suivants en 413.
+  // 10 Mo couvre largement un cours entier (~3600 traits) ; nginx plafonne de
+  // toute façon /api/ à 50 Mo en amont, et toutes ces routes sont authentifiées.
+  app.useBodyParser("json", {
+    type: ["application/json", "application/webhook+json"],
+    limit: "10mb",
+  });
 
   // Nécessaire derrière le reverse-proxy nginx pour que `secure: true` sur le
   // cookie de session et la détection HTTPS fonctionnent correctement.

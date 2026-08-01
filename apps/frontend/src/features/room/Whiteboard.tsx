@@ -45,6 +45,11 @@ export function Whiteboard({ roomId, canManage }: { roomId: string; canManage: b
   const room = useRoomContext();
   const [open, setOpen] = useState(false);
   const [excalidrawAPI, setExcalidrawAPI] = useState<ExcalidrawImperativeAPI | null>(null);
+  // Affiché à l'animateur seul : si l'instantané ne part plus, lui continue de
+  // voir son dessin normalement — ce sont les participants qui rejoindront
+  // ensuite qui hériteront d'un tableau incomplet. Sans ce signal, la panne est
+  // strictement invisible du côté de la seule personne qui peut réagir.
+  const [saveFailed, setSaveFailed] = useState(false);
   const broadcastTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
   // Dernière version connue de chaque élément déjà diffusé — permet de
@@ -344,7 +349,17 @@ export function Whiteboard({ roomId, canManage }: { roomId: string; canManage: b
     lastSaveAtRef.current = Date.now();
     api
       .saveWhiteboard(roomId, { sceneData: { elements: pendingElementsRef.current } })
-      .catch(() => {});
+      .then(() => setSaveFailed(false))
+      .catch((e: unknown) => {
+        // Ne JAMAIS avaler cet échec en silence : un .catch(() => {}) a masqué
+        // pendant des semaines un 413 systématique (limite de corps Express à
+        // 100 Ko, dépassée dès ~35 traits) qui figeait l'instantané serveur pour
+        // le reste de la séance. Conséquence invisible pour l'animateur, qui
+        // continuait de dessiner normalement, mais bien réelle pour quiconque
+        // rejoignait ensuite : un tableau blanc incomplet.
+        console.warn("Sauvegarde du tableau blanc échouée", e);
+        setSaveFailed(true);
+      });
   }, [roomId]);
 
   const handleChange = useCallback(
@@ -419,6 +434,11 @@ export function Whiteboard({ roomId, canManage }: { roomId: string; canManage: b
     <div className="whiteboard-overlay">
       <div className="whiteboard-header">
         <span>Tableau blanc{!canManage && " — lecture seule"}</span>
+        {canManage && saveFailed && (
+          <span className="whiteboard-save-warning" title="Le dessin reste visible en direct, mais un participant qui rejoint maintenant ne le recevra pas en entier.">
+            Sauvegarde interrompue
+          </span>
+        )}
         {!canManage && (
           <button className="icon-btn" onClick={handleRecenter} title="Recadrer sur le dessin">
             <Focus size={18} />
