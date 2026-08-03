@@ -3,9 +3,14 @@ import { Check, Copy, Radio, X } from "lucide-react";
 import { IngressProtocol, IngressStatus, RoomIngressDto } from "@webinairev2/shared-types";
 import { api } from "../../api/client";
 
+// RTMPS en premier, et c'est le défaut : le flux y est transcodé en trois
+// couches simulcast, donc un étudiant sur réseau faible reçoit une couche basse
+// au lieu de saturer. Le WHIP est relayé sans transcodage — plus faible latence
+// et sans coût CPU, mais UNE seule couche : chaque spectateur tire alors le
+// débit plein qu'envoie OBS, sans adaptation possible.
 const PROTOCOLS: { value: IngressProtocol; label: string; hint: string }[] = [
-  { value: "rtmp", label: "RTMPS", hint: "OBS Studio classique" },
-  { value: "whip", label: "WHIP", hint: "WebRTC, faible latence" },
+  { value: "rtmp", label: "RTMPS", hint: "Recommandé — qualité adaptative" },
+  { value: "whip", label: "WHIP", hint: "Latence minimale, sans adaptation" },
 ];
 
 const STATUS_LABELS: Record<IngressStatus, string> = {
@@ -155,7 +160,8 @@ export function ObsPanel({
         <div className="breakout-panel-section">
           <p className="obs-hint">
             Diffusez depuis OBS Studio vers cette salle. Choisissez le protocole, puis reportez les
-            identifiants générés dans OBS.
+            identifiants générés dans OBS. En 720p, réglez le débit d'OBS autour de 2 500 kb/s :
+            au-delà, le lien montant sature et le flux perd des paquets.
           </p>
           <div className="obs-protocols">
             {PROTOCOLS.map((p) => (
