@@ -20,6 +20,7 @@ export function CallChat({ canManage }: { canManage: boolean }) {
   const { localParticipant } = useLocalParticipant();
   const { locks } = useRoomSignals();
   const [draft, setDraft] = useState("");
+  const [sendError, setSendError] = useState<string | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
   const chatBlocked = locks.chatLocked && !canManage;
@@ -38,12 +39,20 @@ export function CallChat({ canManage }: { canManage: boolean }) {
   async function handleSend() {
     const text = draft.trim();
     if (!text || isSending) return;
-    setDraft("");
+    setSendError(null);
     try {
       await send(text);
-    } catch {
-      // message perdu silencieusement en cas d'échec réseau ponctuel — pas de
-      // file d'attente/retry pour ce chat éphémère
+      // Vidé APRÈS le succès seulement. Auparavant le champ était vidé d'avance
+      // et l'erreur avalée : comme useChat n'émet l'écho local qu'une fois
+      // sendText résolu (voir setupChat dans @livekit/components-core), un envoi
+      // en échec était indiscernable d'un envoi réussi — le texte disparaissait,
+      // rien ne s'affichait, et il ne restait aucune trace à diagnostiquer.
+      setDraft("");
+    } catch (e) {
+      // console.error en plus du bandeau : le message d'erreur du SDK est le
+      // seul indice exploitable quand l'envoi échoue côté transport.
+      console.error("Échec d'envoi du message de discussion", e);
+      setSendError(e instanceof Error ? e.message : "Message non envoyé");
     }
   }
 
@@ -71,6 +80,10 @@ export function CallChat({ canManage }: { canManage: boolean }) {
           La discussion est réservée à l'animateur.
         </div>
       ) : (
+        <>
+        {/* Le texte reste dans le champ après un échec : l'utilisateur peut
+            réessayer sans le retaper. */}
+        {sendError && <div className="call-chat-error">Message non envoyé — {sendError}</div>}
         <div className="call-chat-input-row">
           <input
             className="call-chat-input"
@@ -90,6 +103,7 @@ export function CallChat({ canManage }: { canManage: boolean }) {
             <Send size={16} />
           </button>
         </div>
+        </>
       )}
     </div>
   );

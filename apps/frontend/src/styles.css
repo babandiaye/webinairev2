@@ -3420,6 +3420,16 @@ button.stat-item:focus-visible {
   color: rgba(255, 255, 255, 0.6);
   font-size: 0.78rem;
 }
+/* Échec d'envoi : rouge sur le fond sombre de la barre latérale, pas le
+   .error-banner des pages claires qui y serait illisible. */
+.call-chat-error {
+  padding: 8px 11px;
+  margin-bottom: 6px;
+  border-radius: var(--radius);
+  background: rgba(220, 38, 38, 0.16);
+  color: #ff9494;
+  font-size: 0.76rem;
+}
 
 /* Signale à l'animateur que l'instantané serveur ne part plus. Discret et non
    bloquant : son dessin reste diffusé en direct, seul un participant qui
