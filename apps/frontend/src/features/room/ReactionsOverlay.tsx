@@ -13,7 +13,10 @@ export function ReactionsOverlay() {
   return (
     <div className="reactions-overlay" aria-hidden>
       {reactions.map((reaction) => (
-        <div key={reaction.id} className="reaction-float">
+        // Position tirée au sort à la réception (voir FloatingReaction.x) : deux
+        // réactions simultanées ne se superposent plus, contrairement à
+        // l'empilement en coin qu'on avait avant.
+        <div key={reaction.id} className="reaction-float" style={{ left: `${reaction.x}%` }}>
           <span className="reaction-emoji">{reaction.emoji}</span>
           <span className="reaction-name">{reaction.name}</span>
         </div>

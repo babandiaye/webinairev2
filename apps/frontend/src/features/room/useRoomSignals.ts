@@ -14,9 +14,11 @@ export const REACTION_TOPIC = "reaction";
 export const REACTIONS = ["👍", "👏", "❤️", "😂", "😮", "🎉"] as const;
 export type ReactionEmoji = (typeof REACTIONS)[number];
 
-// Durée d'affichage d'une réaction flottante. Assez pour être vue de tous,
-// assez court pour ne pas encombrer la scène pendant une explication.
-const REACTION_LIFETIME_MS = 4000;
+// Durée d'affichage d'une réaction flottante. DOIT rester alignée sur la durée
+// de l'animation `reaction-rise` (styles.css) : plus courte, la réaction est
+// retirée du DOM en pleine montée et disparaît d'un coup ; plus longue, un
+// élément déjà invisible (animation `forwards`) traîne pour rien.
+const REACTION_LIFETIME_MS = 3000;
 
 /**
  * Messages du canal `hand-raise`.
@@ -200,6 +202,15 @@ export type FloatingReaction = {
   id: string;
   name: string;
   emoji: string;
+  /**
+   * Position horizontale de départ, en % de la largeur de la scène (20 à 80).
+   *
+   * Tirée au sort à la réception, pas au rendu : recalculée à chaque rendu, la
+   * réaction se téléporterait latéralement en pleine montée. Bornée à 20-80
+   * pour ne pas naître sous le rail latéral ni sous la barre de participants
+   * (même choix que livestreamv3).
+   */
+  x: number;
 };
 
 type ReactionMessage = { name: string; emoji: string };
@@ -223,7 +234,7 @@ function useReactionsState(reactionsLocked: boolean): {
 
   const push = useCallback((name: string, emoji: string) => {
     const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    setReactions((prev) => [...prev, { id, name, emoji }]);
+    setReactions((prev) => [...prev, { id, name, emoji, x: 20 + Math.random() * 60 }]);
     const timeout = setTimeout(() => {
       setReactions((prev) => prev.filter((r) => r.id !== id));
     }, REACTION_LIFETIME_MS);
