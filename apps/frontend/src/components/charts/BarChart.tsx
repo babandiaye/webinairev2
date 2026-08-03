@@ -6,11 +6,18 @@
 export function BarChart({
   points,
   formatValue,
+  formatLabel,
   width = 280,
   height = 72,
 }: {
   points: { date: string; value: number }[];
   formatValue?: (value: number) => string;
+  /**
+   * Rend la date d'un point lisible dans l'infobulle. Sans elle, la clé brute
+   * "2026-08-01" s'affichait telle quelle — trompeur sur la plage annuelle, où
+   * un point représente tout le mois d'août et non son premier jour.
+   */
+  formatLabel?: (date: string) => string;
   width?: number;
   height?: number;
 }) {
@@ -27,7 +34,8 @@ export function BarChart({
         return (
           <rect key={p.date} x={x} y={y} width={barWidth} height={barHeight} rx={1.5} fill="currentColor">
             <title>
-              {p.date} — {formatValue ? formatValue(p.value) : p.value}
+              {formatLabel ? formatLabel(p.date) : p.date} —{" "}
+              {formatValue ? formatValue(p.value) : p.value}
             </title>
           </rect>
         );

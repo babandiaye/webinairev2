@@ -12,24 +12,73 @@ import {
   UserCog,
   GraduationCap,
 } from "lucide-react";
-import { ActivityStatsDto, RoomDto, StatsRange } from "@webinairev2/shared-types";
+import { ActivityStatsDto, RoomDto, StatsBucket, StatsRange } from "@webinairev2/shared-types";
 import { useAuth } from "../../auth/AuthProvider";
 import { api } from "../../api/client";
-import { BRAND } from "../../lib/brand";
 import { StatusBadge } from "../../components/ui/StatusBadge";
-import { StatCard } from "../../components/ui/StatCard";
+import { StatItem } from "../../components/ui/StatItem";
 import { DashboardLayout } from "../../components/layout/DashboardLayout";
 import { BarChart } from "../../components/charts/BarChart";
 
 const MONTHS = ["JAN", "FÉV", "MAR", "AVR", "MAI", "JUIN", "JUIL", "AOÛT", "SEP", "OCT", "NOV", "DÉC"];
 
+// L'année est agrégée par mois côté serveur (voir StatsService) : le sélecteur
+// ne fait que demander une plage, il n'a pas à connaître la granularité.
+const RANGES: { value: StatsRange; label: string }[] = [
+  { value: "week", label: "Semaine" },
+  { value: "month", label: "Mois" },
+  { value: "year", label: "Année" },
+];
+
 function sum(points: { value: number }[]): number {
   return points.reduce((acc, p) => acc + p.value, 0);
 }
 
-function formatHours(totalSeconds: number): string {
+/**
+ * Durée cumulée d'enregistrement, dans l'unité que la valeur appelle.
+ *
+ * En dessous d'une heure, l'heure décimale est illisible : « 0,4 h » ne dit
+ * rien à personne, « 25 min » se comprend d'un coup d'œil. Au-delà, l'inverse
+ * devient vrai — « 372 min » demande un calcul mental que « 6,2 h » évite.
+ */
+function formatDuration(totalSeconds: number): string {
+  if (totalSeconds <= 0) return "0 min";
+  // Une capture de quelques secondes existe (test, faux départ) : l'arrondi la
+  // ramènerait à « 0 min », ce qui se lirait comme une absence d'enregistrement.
+  if (totalSeconds < 60) return "< 1 min";
+
+  // Le seuil porte sur les minutes ARRONDIES, pas sur les secondes : 3 599 s
+  // valent 59,98 min, donc passeraient le test « moins d'une heure » pour
+  // s'afficher « 60 min ».
+  const minutes = Math.round(totalSeconds / 60);
+  if (minutes < 60) return `${minutes} min`;
+
   const hours = totalSeconds / 3600;
-  return `${hours.toFixed(hours < 10 ? 1 : 0)} h`;
+  return `${hours.toLocaleString("fr-FR", {
+    maximumFractionDigits: hours < 10 ? 1 : 0,
+  })} h`;
+}
+
+const DAY_LABEL = new Intl.DateTimeFormat("fr-FR", { weekday: "short", day: "numeric", month: "short" });
+const MONTH_LABEL = new Intl.DateTimeFormat("fr-FR", { month: "long", year: "numeric" });
+
+/** Libellé d'un point du graphe, selon la granularité renvoyée par le serveur. */
+function formatPointLabel(date: string, bucket: StatsBucket): string {
+  // Midi UTC et non minuit : la date brute "2026-08-01" est interprétée en UTC,
+  // et un fuseau à l'ouest la ferait basculer à la veille à l'affichage.
+  const d = new Date(`${date}T12:00:00Z`);
+  return bucket === "month" ? MONTH_LABEL.format(d) : DAY_LABEL.format(d);
+}
+
+const HOUR = new Intl.DateTimeFormat("fr-FR", { hour: "2-digit", minute: "2-digit" });
+
+/** Horaire lisible d'une salle, tel qu'affiché sous son titre. */
+function formatSchedule(room: RoomDto): string {
+  if (!room.startedAt) return "Pas encore démarrée";
+  const start = HOUR.format(new Date(room.startedAt));
+  if (room.status === "LIVE") return `En cours depuis ${start}`;
+  if (!room.endedAt) return `Démarrée à ${start}`;
+  return `${start} – ${HOUR.format(new Date(room.endedAt))}`;
 }
 
 export function HomePage() {
@@ -147,25 +196,26 @@ export function HomePage() {
         </p>
       </div>
 
-      <div className="stat-grid">
-        <StatCard label="Salles (CM) totales" value={stats.total} icon={DoorOpen} color={BRAND.blue} />
-        <StatCard label="En direct" value={stats.live} icon={Radio} color={BRAND.red} pulse />
-        <StatCard label="Terminées" value={stats.ended} icon={CheckCircle2} color={BRAND.green} />
+      {/* Bandeau unique et non cinq cartes : les libellés portent leur propre
+          qualificatif, ce qui supprime la troisième ligne grise ("Total",
+          "En cours", "Aujourd'hui"…) qui ne faisait que répéter l'intitulé. */}
+      <div className="stat-rail">
+        <StatItem label="Salles au total" value={stats.total} icon={DoorOpen} />
+        <StatItem label="En direct" value={stats.live} icon={Radio} alert />
+        <StatItem label="Terminées aujourd'hui" value={stats.ended} icon={CheckCircle2} />
         {isAdmin && userCount !== null && (
-          <StatCard
-            label="Utilisateurs"
+          <StatItem
+            label="Utilisateurs inscrits"
             value={userCount}
             icon={Users}
-            color={BRAND.slate}
             onClick={() => navigate("/admin/users")}
           />
         )}
         {isAdmin && recordingCount !== null && (
-          <StatCard
+          <StatItem
             label="Enregistrements"
             value={recordingCount}
             icon={Video}
-            color={BRAND.orange}
             onClick={() => navigate("/recordings")}
           />
         )}
@@ -185,8 +235,16 @@ export function HomePage() {
             <div className="meeting-list">
               {filteredRooms.map((room) => {
                 const date = new Date(room.startedAt ?? room.endedAt ?? Date.now());
+                // Ouvre-t-il une séance, ou en rejoint-il une qui tourne déjà ?
+                // Un participant sur une salle planifiée « rejoint » lui aussi :
+                // il atterrit sur l'écran d'attente jusqu'à l'arrivée d'un
+                // animateur, il ne démarre rien.
+                const startsSession = room.status !== "LIVE" && room.canManage;
                 return (
-                  <div className="meeting-row" key={room.id}>
+                  // Le nom LiveKit passe en infobulle : c'est un identifiant
+                  // technique dont personne n'a l'usage à la lecture, mais qui
+                  // sert à corréler avec les logs quand on le cherche.
+                  <div className="meeting-row" key={room.id} title={`Salle LiveKit : ${room.roomName}`}>
                     <div className="meeting-date">
                       <div className="meeting-date-day">{date.getDate()}</div>
                       <div className="meeting-date-month">{MONTHS[date.getMonth()]}</div>
@@ -201,7 +259,9 @@ export function HomePage() {
                           </span>
                         )}
                       </p>
-                      <span className="meeting-sub">Salle : {room.roomName}</span>
+                      {/* À la place de l'identifiant de salle : l'horaire, seule
+                          information de cette ligne qu'un humain lit vraiment. */}
+                      <span className="meeting-sub">{formatSchedule(room)}</span>
                     </div>
                     <div className="meeting-actions">
                       <StatusBadge status={room.status} />
@@ -221,9 +281,39 @@ export function HomePage() {
                           Étudiants
                         </button>
                       )}
-                      {(room.status !== "ENDED" || canCreateRoom) && (
-                        <button className="btn btn-primary" onClick={() => navigate(`/rooms/${room.id}`)}>
-                          {room.status === "ENDED" ? "Redémarrer" : "Rejoindre"}
+                      {/* Trois états, deux verbes, et le droit RÉEL sur cette
+                          salle-là :
+                            en direct  → Rejoindre, pour tout le monde ;
+                            planifiée  → Démarrer pour qui peut la gérer,
+                                         Rejoindre sinon (salle d'attente) ;
+                            terminée   → Démarrer, gestionnaires seuls.
+                          « Redémarrer » laissait croire à une reprise : join()
+                          repart d'un tableau blanc vierge et remet le statut à
+                          SCHEDULED, c'est bien une NOUVELLE séance. Le mot est
+                          aussi celui du plugin Moodle, pour que les deux
+                          surfaces nomment la même action pareil.
+                          La condition suit room.canManage — le droit réel sur
+                          CETTE salle, calculé par le serveur avec la règle
+                          exacte de join() — et non le rôle global. Sans effet
+                          pour un modérateur : list() ne lui renvoie que des
+                          salles dont il est créateur ou inscrit (l'enseignant
+                          venu de Moodle y est auto-inscrit par syncUser), donc
+                          canManage y vaut toujours vrai. Ça rattrape en
+                          revanche le créateur rétrogradé en VIEWER depuis
+                          /admin/users : l'API le laisse toujours relancer SA
+                          salle, le tableau de bord lui masquait le bouton.
+                          Deux verbes, deux couleurs pleines : bleu pour ouvrir
+                          une séance, vert pour entrer dans une séance qui
+                          tourne. La pastille de statut, à gauche, continue de
+                          porter l'état ; le bouton porte l'action. Ce sont les
+                          trois actions voisines, sans bordure au repos, qui
+                          donnent le contraste — pas la retenue du bouton. */}
+                      {(room.status !== "ENDED" || room.canManage) && (
+                        <button
+                          className={`btn ${startsSession ? "btn-primary" : "btn-join"}`}
+                          onClick={() => navigate(`/rooms/${room.id}`)}
+                        >
+                          {startsSession ? "Démarrer" : "Rejoindre"}
                         </button>
                       )}
                       {room.canManage && room.status !== "LIVE" && (
@@ -277,18 +367,16 @@ export function HomePage() {
         <div className="panel-header">
           <h3>Activité</h3>
           <div className="range-toggle">
-            <button
-              className={statsRange === "week" ? "active" : ""}
-              onClick={() => setStatsRange("week")}
-            >
-              Semaine
-            </button>
-            <button
-              className={statsRange === "month" ? "active" : ""}
-              onClick={() => setStatsRange("month")}
-            >
-              Mois
-            </button>
+            {RANGES.map(({ value, label }) => (
+              <button
+                key={value}
+                className={statsRange === value ? "active" : ""}
+                aria-pressed={statsRange === value}
+                onClick={() => setStatsRange(value)}
+              >
+                {label}
+              </button>
+            ))}
           </div>
         </div>
 
@@ -297,21 +385,28 @@ export function HomePage() {
             <div className="activity-chart">
               <span className="activity-chart-value">{sum(activityStats.rooms)}</span>
               <span className="activity-chart-label">Cours (CM) créés</span>
-              <BarChart points={activityStats.rooms} />
+              <BarChart
+                points={activityStats.rooms}
+                formatLabel={(d) => formatPointLabel(d, activityStats.bucket)}
+              />
             </div>
             <div className="activity-chart">
               <span className="activity-chart-value">{sum(activityStats.sessions)}</span>
               <span className="activity-chart-label">Sessions</span>
-              <BarChart points={activityStats.sessions} />
+              <BarChart
+                points={activityStats.sessions}
+                formatLabel={(d) => formatPointLabel(d, activityStats.bucket)}
+              />
             </div>
             <div className="activity-chart">
               <span className="activity-chart-value">
-                {formatHours(sum(activityStats.recordingDurationSeconds))}
+                {formatDuration(sum(activityStats.recordingDurationSeconds))}
               </span>
               <span className="activity-chart-label">Durée enregistrée</span>
               <BarChart
                 points={activityStats.recordingDurationSeconds}
-                formatValue={formatHours}
+                formatValue={formatDuration}
+                formatLabel={(d) => formatPointLabel(d, activityStats.bucket)}
               />
             </div>
           </div>

@@ -34,6 +34,13 @@
 
   --color-success: #179f47;
   --color-success-bg: #e2f5e8;
+  /* Vert PLEIN, pour un fond de bouton — distinct de --color-success, qui sert
+     de teinte de texte ou de pastille sur fond clair. #179f47 avec du texte
+     blanc ne donne que 3,45:1, sous le seuil AA de 4,5 : mesuré, pas estimé.
+     #127c38 monte à 5,30:1, exactement le contraste du bouton bleu primaire. */
+  --color-join-bg: #127c38;
+  --color-join-bg-hover: #0f6b30;
+  --color-join-text: #ffffff;
   /* Même orange que l'accent : un avertissement EST un signal d'attention, lui
      donner une teinte propre ne ferait qu'ajouter une couleur au décompte. */
   --color-warning: #e28423;
@@ -85,6 +92,12 @@
 
   --color-success: #3fc46f;
   --color-success-bg: rgba(23, 159, 71, 0.2);
+  /* Sur fond sombre, le vert foncé du thème clair ne se détacherait plus de la
+     surface. On prend le vert clair et on inverse l'encre : 7,44:1, contre
+     2,25:1 si on gardait du texte blanc dessus. */
+  --color-join-bg: #3fc46f;
+  --color-join-bg-hover: #5cd489;
+  --color-join-text: #0d2029;
   --color-warning: #f0a04f;
   --color-warning-bg: rgba(226, 132, 35, 0.18);
 
@@ -121,6 +134,12 @@
     --color-danger-bg: rgba(192, 39, 28, 0.18);
     --color-success: #3fc46f;
     --color-success-bg: rgba(23, 159, 71, 0.2);
+    /* Mêmes valeurs que :root[data-theme="dark"] — sans elles, qui n'a pas
+       choisi de thème et suit un système en sombre héritait du vert foncé du
+       thème clair, qui se noie dans la surface. */
+    --color-join-bg: #3fc46f;
+    --color-join-bg-hover: #5cd489;
+    --color-join-text: #0d2029;
     --color-warning: #f0a04f;
     --color-warning-bg: rgba(226, 132, 35, 0.18);
     --color-status-scheduled-bg: rgba(63, 159, 220, 0.16);
@@ -576,7 +595,11 @@ time {
 
 .dashboard-welcome h2 {
   margin: 0 0 4px;
-  font-size: 1.4rem;
+  /* Archivo à chasse réduite, exploitée pour de bon : ce titre est le seul de
+     la page à ce corps, il porte donc la voix typographique à lui seul. */
+  font-size: 1.9rem;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
 }
 .dashboard-welcome p {
   margin: 0;
@@ -584,64 +607,86 @@ time {
   font-size: 0.92rem;
 }
 
-/* Cartes KPI */
-.stat-grid {
+/* ── Bandeau de statistiques ──────────────────────────────────────────────────
+   UNE surface découpée par des filets, et non cinq cartes. Cinq cartes au même
+   rayon, à la même ombre et à la pastille d'icône colorée, c'était la mise en
+   page par défaut que la charte du projet écarte explicitement — et leurs cinq
+   teintes formaient une palette décorative contredisant « une dominante, un
+   accent, le vert et le rouge réservés au sémantique ».
+   Ici aucune couleur par défaut : seul « En direct » en prend une, et seulement
+   quand sa valeur dépasse zéro. Une couleur qui apparaît signifie alors
+   quelque chose. */
+.stat-rail {
+  /* auto-fit plutôt qu'un nombre de colonnes figé : entre 900 et 1300 px, cinq
+     colonnes imposées serraient « TERMINÉES AUJOURD'HUI » au point de le faire
+     passer à la ligne de façon irrégulière.
+     Les filets ne sont pas des bordures mais une gouttière d'1 px laissant
+     voir le fond du conteneur. Ils restent donc justes dans les deux sens quel
+     que soit le nombre de colonnes et le point de repli — une bordure gauche
+     avec exception sur le premier élément se serait cassée dès le retour à la
+     ligne. */
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
-  gap: 16px;
-  margin: 24px 0;
-}
-.stat-card {
-  background: var(--color-surface);
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 1px;
+  background: var(--color-border);
   border: 1px solid var(--color-border);
-  border-top-width: 3px;
   border-radius: var(--radius);
   box-shadow: var(--shadow);
-  padding: 18px 20px;
-  width: 100%;
+  margin: 22px 0 24px;
+  overflow: hidden;
+}
+.stat-item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px 20px;
   text-align: left;
   font-family: inherit;
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  background: var(--color-surface);
+  border: none;
+  color: inherit;
 }
-button.stat-card {
+button.stat-item {
   cursor: pointer;
 }
-button.stat-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 20px -8px rgba(0, 0, 0, 0.25);
+button.stat-item:hover {
+  background: var(--color-bg);
 }
-.stat-card-top {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  margin-bottom: 10px;
+button.stat-item:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
 }
-.stat-card-label {
-  font-size: 0.84rem;
-  color: var(--color-text-muted);
-  font-weight: 600;
-}
-.stat-card-icon {
-  width: 38px;
-  height: 38px;
-  border-radius: 10px;
+.stat-item-label {
   display: flex;
   align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
+  gap: 7px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
 }
-.stat-card-value {
+.stat-item-value {
   display: flex;
   align-items: center;
   gap: 9px;
-  font-size: 1.85rem;
-  font-weight: 700;
+  font-family: var(--font-display);
+  font-size: 2.1rem;
+  font-weight: 600;
+  line-height: 1;
+  /* Chiffres tabulaires : les valeurs sont alignées entre segments et ne
+     sautillent pas quand le sondage de 15 s les fait changer. */
   font-variant-numeric: tabular-nums;
 }
-.stat-card-pulse-dot {
+.stat-item-alert .stat-item-value,
+.stat-item-alert .stat-item-label {
+  color: var(--color-danger);
+}
+.stat-item-dot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
+  background: var(--color-danger);
   animation: pulse 1.5s ease-in-out infinite;
 }
 
@@ -694,8 +739,17 @@ button.stat-card:hover {
   .dashboard-content {
     padding: 18px 14px 40px;
   }
-  .stat-grid {
+  /* Deux colonnes fermes en dessous de 900 px : auto-fit en descendrait à une
+     seule, et un bandeau d'une colonne sur cinq lignes n'est plus un bandeau.
+     Les filets suivent d'eux-mêmes, ils viennent de la gouttière. */
+  .stat-rail {
     grid-template-columns: repeat(2, 1fr);
+  }
+  .stat-item {
+    padding: 14px 16px;
+  }
+  .stat-item-value {
+    font-size: 1.7rem;
   }
 
   /* Rangées type tableau (réunions/utilisateurs/enregistrements) : le bloc
@@ -762,18 +816,20 @@ button.stat-card:hover {
   font-size: 1rem;
 }
 
+/* Raccourcis : ils doublent la barre latérale, ils n'ont donc aucune raison
+   d'avoir le poids visuel de trois boutons encadrés. Liste séparée par des
+   filets, alignée sur le reste de la page. */
 .quick-actions {
   display: flex;
   flex-direction: column;
-  gap: 8px;
 }
 .quick-action-btn {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 10px 12px;
-  border-radius: 8px;
-  border: 1px solid var(--color-border);
+  padding: 11px 4px;
+  border: none;
+  border-top: 1px solid var(--color-border);
   background: transparent;
   color: var(--color-text);
   font-size: 0.87rem;
@@ -781,9 +837,22 @@ button.stat-card:hover {
   text-align: left;
   font-family: inherit;
 }
+.quick-action-btn:first-child {
+  border-top: none;
+}
+.quick-action-btn svg {
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+}
 .quick-action-btn:hover {
-  background: var(--color-bg);
-  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+.quick-action-btn:hover svg {
+  color: var(--color-primary);
+}
+.quick-action-btn:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 
 /* Formulaire création de salle (dépliable depuis l'action rapide) */
@@ -827,12 +896,15 @@ button.stat-card:hover {
   flex-shrink: 0;
 }
 .meeting-date-day {
-  font-weight: 700;
-  font-size: 0.98rem;
-  line-height: 1.1;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 1.35rem;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
 }
 .meeting-date-month {
-  font-size: 0.66rem;
+  font-size: 0.62rem;
+  letter-spacing: 0.08em;
   color: var(--color-text-muted);
   text-transform: uppercase;
 }
@@ -842,21 +914,45 @@ button.stat-card:hover {
 }
 .meeting-title {
   font-weight: 600;
-  font-size: 0.9rem;
-  margin: 0 0 3px;
+  font-size: 0.95rem;
+  margin: 0 0 2px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .meeting-sub {
-  font-size: 0.76rem;
+  font-size: 0.78rem;
   color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
 }
 .meeting-actions {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 6px;
   flex-shrink: 0;
+}
+
+/* Allègement des actions de ligne, PORTÉ PAR CETTE LISTE UNIQUEMENT : .btn-ghost
+   est partagé par une douzaine d'écrans, le redéfinir globalement déborderait
+   largement de ce tableau de bord.
+   Cinq contrôles encadrés par ligne, répétés sur quatre lignes, écrasaient le
+   contenu : la bordure disparaît au repos et ne revient qu'au survol. */
+.meeting-actions .btn-ghost {
+  border-color: transparent;
+  padding: 7px 10px;
+  font-weight: 500;
+}
+.meeting-actions .btn-ghost:hover {
+  border-color: var(--color-border);
+}
+/* « Rejoindre » : une séance est en cours, on y va. Le vert dit l'action
+   disponible ; c'est la pastille de statut, à gauche, qui dit l'état. */
+.meeting-actions .btn-join {
+  background: var(--color-join-bg);
+  color: var(--color-join-text);
+}
+.meeting-actions .btn-join:hover {
+  background: var(--color-join-bg-hover);
 }
 
 .empty-state {
