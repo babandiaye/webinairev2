@@ -1,0 +1,19 @@
+[Unit]
+Description=Restreint les ports internes de LiveKit Ingress (1935/8085/9091) au loopback
+Documentation=file:///usr/local/sbin/livekit-ingress-firewall.sh
+# La liste noire par IP source de cette machine n'est deliberement PAS persistee
+# (le redemarrage sert d'amnistie pour les faux positifs) — mais ces regles-ci
+# portent sur des PORTS, sans risque de faux positif, et doivent survivre au
+# redemarrage : sans cette unite, les trois ports se rouvriraient en silence.
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/livekit-ingress-firewall.sh
+# Pas d'ExecStop : retirer les regles a l'arret rouvrirait les ports
+# — l'arret du service ne doit jamais etre une ouverture.
+
+[Install]
+WantedBy=multi-user.target
