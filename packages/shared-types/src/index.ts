@@ -341,18 +341,30 @@ export interface SystemStatusDto {
 
 // --- Statistiques d'activité (tableau de bord) ---
 
-export type StatsRange = "week" | "month";
+export type StatsRange = "week" | "month" | "year";
+
+/**
+ * Granularité d'un point de la série.
+ *
+ * Renvoyée par le serveur plutôt que redérivée du `range` côté client : c'est
+ * le serveur qui décide du regroupement (une année en 365 barres journalières
+ * serait illisible et inutilement lourde, elle est donc agrégée par mois), et
+ * le libellé des points en dépend directement.
+ */
+export type StatsBucket = "day" | "month";
 
 export interface ActivityPointDto {
-  date: string; // YYYY-MM-DD
+  /** YYYY-MM-DD — premier jour de la période pour un regroupement mensuel. */
+  date: string;
   value: number;
 }
 
 export interface ActivityStatsDto {
   range: StatsRange;
-  rooms: ActivityPointDto[]; // cours (salles MAIN) créés par jour
-  sessions: ActivityPointDto[]; // sessions distinctes par jour
-  recordingDurationSeconds: ActivityPointDto[]; // secondes enregistrées par jour
+  bucket: StatsBucket;
+  rooms: ActivityPointDto[]; // cours (salles MAIN) créés
+  sessions: ActivityPointDto[]; // sessions distinctes
+  recordingDurationSeconds: ActivityPointDto[]; // secondes enregistrées
 }
 
 // --- Inscription aux cours (rôles Modérateur/Participant) ---
