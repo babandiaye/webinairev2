@@ -4,6 +4,7 @@ import { useParticipants } from "@livekit/components-react";
 import type { Role } from "@webinairev2/shared-types";
 import { api } from "../../api/client";
 import { CallChat } from "./CallChat";
+import { isIngressMetadata } from "./participantMeta";
 import { useRoomSignals } from "./useRoomSignals";
 
 export type SidebarTab = "participants" | "chat";
@@ -166,7 +167,13 @@ export function CallSidebar({
           <div className="call-participant-list">
             {participants.map((p) => {
               const meta = parseMetadata(p.metadata);
-              const label = roleLabel(meta);
+              // Une diffusion OBS entre dans la salle comme un participant, mais
+              // ce n'est pas quelqu'un : lui « donner la parole » ou le « nommer
+              // présentateur » n'a aucun sens (il publie avec ses propres droits
+              // d'ingress). Seul le retrait reste utile — c'est le moyen de
+              // couper une régie restée branchée.
+              const isIngress = isIngressMetadata(p.metadata);
+              const label = isIngress ? "Diffusion OBS" : roleLabel(meta);
               const isMod = meta?.isModerator ?? false;
               const sources = p.permissions?.canPublishSources ?? [];
               const canSpeak = sources.includes(TRACK_SOURCE_MICROPHONE);
@@ -204,7 +211,7 @@ export function CallSidebar({
                   </div>
                   {canManage && p.identity !== localIdentity && (
                     <div className="call-participant-actions">
-                      {!isMod && (
+                      {!isMod && !isIngress && (
                         <button
                           className={`call-participant-action ${canSpeak ? "call-participant-action-active" : ""} ${
                             handRaised && !canSpeak ? "call-participant-action-highlight" : ""
@@ -216,7 +223,7 @@ export function CallSidebar({
                           <Mic size={14} />
                         </button>
                       )}
-                      {!isMod && (
+                      {!isMod && !isIngress && (
                         <button
                           className={`call-participant-action ${canPresent ? "call-participant-action-active" : ""}`}
                           title={canPresent ? "Retirer la présentation" : "Nommer présentateur"}
@@ -226,7 +233,7 @@ export function CallSidebar({
                           <ScreenShare size={14} />
                         </button>
                       )}
-                      {p.isMicrophoneEnabled && (
+                      {p.isMicrophoneEnabled && !isIngress && (
                         <button
                           className="call-participant-action"
                           title="Couper le micro"

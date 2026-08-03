@@ -6,6 +6,7 @@ import type {
   BreakoutRoomDto,
   CreateBreakoutRoomsDto,
   CreatePollDto,
+  CreateIngressDto,
   CreateRoomDto,
   CreateUserDto,
   CsvImportSummaryDto,
@@ -22,6 +23,8 @@ import type {
   RecordingDto,
   RecordingWithRoomDto,
   RoomDto,
+  RoomIngressDto,
+  RoomIngressStateDto,
   SetCurrentSlideDto,
   StatsRange,
   SystemStatusDto,
@@ -97,6 +100,13 @@ export const api = {
   deleteRecording: (roomId: string, recordingId: string) =>
     request<void>(`/rooms/${roomId}/recordings/${recordingId}`, { method: "DELETE" }),
   listAllRecordings: () => request<RecordingWithRoomDto[]>("/recordings"),
+
+  // Diffusion OBS (LiveKit Ingress) — réservé à l'animateur côté API : la
+  // réponse contient la clé de flux, donc un droit de publication dans la salle.
+  getRoomIngress: (roomId: string) => request<RoomIngressStateDto>(`/rooms/${roomId}/ingress`),
+  createRoomIngress: (roomId: string, dto: CreateIngressDto) =>
+    request<RoomIngressDto>(`/rooms/${roomId}/ingress`, { method: "POST", body: JSON.stringify(dto) }),
+  deleteRoomIngress: (roomId: string) => request<void>(`/rooms/${roomId}/ingress`, { method: "DELETE" }),
 
   listAttendance: (roomId: string) => request<AttendanceSessionGroupDto[]>(`/rooms/${roomId}/attendance`),
   deleteAttendanceSession: (roomId: string, startedAtMs: number) =>

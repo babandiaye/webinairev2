@@ -1,12 +1,25 @@
 import { Injectable } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
 import { AttendanceRecord } from "@prisma/client";
-import { AttendanceDto, AttendanceSessionGroupDto } from "@webinairev2/shared-types";
+import {
+  AttendanceDto,
+  AttendanceSessionGroupDto,
+  INGRESS_IDENTITY_PREFIX,
+} from "@webinairev2/shared-types";
 
 // L'egress Web (voir livekit-token.service.ts createRecorderToken) se connecte
 // aussi à la Room comme un participant LiveKit — jamais un vrai utilisateur, ne
 // doit jamais apparaître dans la liste de présence.
 const EGRESS_RECORDER_PREFIX = "egress-recorder-";
+
+// Même raisonnement pour la diffusion OBS (voir IngressService) : le flux entre
+// dans la salle comme un participant, mais compter « Diffusion OBS » comme
+// présent pendant 2 h fausserait la feuille de présence du cours.
+const SYSTEM_IDENTITY_PREFIXES = [EGRESS_RECORDER_PREFIX, INGRESS_IDENTITY_PREFIX];
+
+function isSystemIdentity(identity: string): boolean {
+  return SYSTEM_IDENTITY_PREFIXES.some((prefix) => identity.startsWith(prefix));
+}
 
 @Injectable()
 export class AttendanceService {
@@ -21,7 +34,7 @@ export class AttendanceService {
     isModerator: boolean,
     joinedAt: Date
   ): Promise<void> {
-    if (identity.startsWith(EGRESS_RECORDER_PREFIX)) return;
+    if (isSystemIdentity(identity)) return;
     const room = await this.prisma.room.findUnique({ where: { roomName } });
     if (!room) return;
 
@@ -37,7 +50,7 @@ export class AttendanceService {
   }
 
   async recordLeave(roomName: string, identity: string, leftAt: Date): Promise<void> {
-    if (identity.startsWith(EGRESS_RECORDER_PREFIX)) return;
+    if (isSystemIdentity(identity)) return;
     const room = await this.prisma.room.findUnique({ where: { roomName } });
     if (!room) return;
 

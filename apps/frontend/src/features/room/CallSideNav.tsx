@@ -3,12 +3,13 @@ import {
   BarChart3,
   PenSquare,
   Presentation as PresentationIcon,
+  Radio,
   Settings,
   Users,
   Video,
 } from "lucide-react";
 
-export type CallPanel = "breakout" | "whiteboard" | "polls" | "presentations" | "engagement";
+export type CallPanel = "breakout" | "whiteboard" | "polls" | "presentations" | "engagement" | "obs";
 
 // Rail persistant remplaçant l'ancien menu "..." en popup — accès direct aux
 // fonctionnalités de la salle, toujours visible plutôt que caché derrière un clic
@@ -100,6 +101,17 @@ export function CallSideNav({
           >
             <Users size={19} />
             <span>Sous-groupes</span>
+          </button>
+        )}
+
+        {/* Diffusion depuis un encodeur externe (OBS) — animateur seul, et pas
+            en sous-groupe : un sous-groupe est un espace de travail temporaire,
+            y brancher une régie n'aurait pas de sens. Le panneau expose la clé
+            de flux, que l'API réserve de toute façon aux gestionnaires. */}
+        {canManage && !isInBreakout && (
+          <button className={itemClass("obs")} onClick={() => handleSelect("obs")} title="Diffusion OBS">
+            <Radio size={19} />
+            <span>Diffusion OBS</span>
           </button>
         )}
 

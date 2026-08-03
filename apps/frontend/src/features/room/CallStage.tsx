@@ -5,7 +5,7 @@ import { useIsMuted, useLocalParticipant, useTracks, VideoTrack } from "@livekit
 import type { TrackReference } from "@livekit/components-react";
 import { Video, VideoOff } from "lucide-react";
 import type { Role } from "@webinairev2/shared-types";
-import { isModeratorMetadata } from "./participantMeta";
+import { isIngressMetadata, isModeratorMetadata } from "./participantMeta";
 
 function participantLabel(track: TrackReference): string {
   return track.participant.name || track.participant.identity;
@@ -58,17 +58,38 @@ export function CallStage({ canManage = true }: { canManage?: boolean }) {
   // connexion (voir RoomPage.tsx), donc les pistes publiées n'apparaissent pas
   // encore comme "abonnées" — il faut néanmoins pouvoir les lister pour décider
   // laquelle est la piste principale, avant même de s'y abonner.
-  const tracks = useTracks([Track.Source.Camera, Track.Source.ScreenShare], { onlySubscribed: false });
+  // Source.Unknown inclus à cause de la diffusion OBS : le backend déclare bien
+  // CAMERA/MICROPHONE à la création de l'ingress, mais en WHIP le flux est
+  // relayé sans transcodage et la source peut ne pas être conservée — une piste
+  // pourtant publiée n'apparaîtrait alors dans AUCUNE liste, donc nulle part à
+  // l'écran. Aucun client normal ne publie en source inconnue, l'élargissement
+  // ne ramène donc rien d'autre.
+  const tracks = useTracks([Track.Source.Camera, Track.Source.ScreenShare, Track.Source.Unknown], {
+    onlySubscribed: false,
+  });
 
+  // Le flux OBS se reconnaît à la métadonnée du participant, jamais à sa source :
+  // c'est justement ce dont on ne peut pas dépendre ici (voir ci-dessus).
+  const ingressTrack = tracks.find(
+    (t) => isIngressMetadata(t.participant.metadata) && t.publication.kind === Track.Kind.Video
+  );
   const screenTrack = tracks.find((t) => t.source === Track.Source.ScreenShare);
-  const camTracks = tracks.filter((t) => t.source === Track.Source.Camera);
+  // L'ingress est exclu des caméras : il a déjà sa place en vidéo principale, le
+  // reprendre en vignette secondaire l'afficherait deux fois quand un partage
+  // d'écran lui passe devant.
+  const camTracks = tracks.filter(
+    (t) => t.source === Track.Source.Camera && !isIngressMetadata(t.participant.metadata)
+  );
   const mainCamTrack =
     camTracks.find((t) => isModeratorMetadata(t.participant.metadata)) ?? camTracks[0];
   const secondaryCamTracks = camTracks.filter(
     (t) => t.participant.identity !== mainCamTrack?.participant.identity
   );
 
-  const mainTrack = screenTrack ?? mainCamTrack;
+  // Ordre repris de livestreamv3 : un partage d'écran est une intention
+  // immédiate de l'animateur et prime sur tout ; à défaut, la régie OBS est le
+  // contenu principal de la séance, devant la caméra de l'animateur.
+  const mainTrack = screenTrack ?? ingressTrack ?? mainCamTrack;
 
   // Abonnement manuel pour un spectateur (canManage=false) : ne s'abonne
   // JAMAIS aux pistes secondaires, et uniquement à la piste principale
@@ -107,14 +128,23 @@ export function CallStage({ canManage = true }: { canManage?: boolean }) {
   // et livekit-client met audio:false par défaut), mais l'omettre ici serait
   // exactement la même faille que le micro : silencieuse jusqu'au jour où
   // quelqu'un active la capture audio de l'écran.
-  const audioTracks = useTracks([Track.Source.Microphone, Track.Source.ScreenShareAudio], {
-    onlySubscribed: false,
-  });
+  // Source.Unknown pour la même raison que la vidéo (voir plus haut) : sans lui,
+  // le son d'une diffusion OBS en WHIP pourrait n'être audible de personne.
+  const audioTracks = useTracks(
+    [Track.Source.Microphone, Track.Source.ScreenShareAudio, Track.Source.Unknown],
+    { onlySubscribed: false }
+  );
   const subscribedAudioRef = useRef<Set<RemoteTrackPublication>>(new Set());
   useEffect(() => {
     if (canManage) return;
     const nextPubs = new Set(
-      audioTracks.filter((t) => !t.participant.isLocal).map((t) => t.publication as RemoteTrackPublication)
+      audioTracks
+        // Le filtre sur le type est indispensable depuis l'ajout de
+        // Source.Unknown : sans lui, la VIDÉO d'un ingress se retrouverait
+        // abonnée ici même lorsqu'un partage d'écran lui passe devant — soit
+        // exactement la bande passante que ce bloc cherche à économiser.
+        .filter((t) => !t.participant.isLocal && t.publication.kind === Track.Kind.Audio)
+        .map((t) => t.publication as RemoteTrackPublication)
     );
     for (const pub of subscribedAudioRef.current) {
       if (!nextPubs.has(pub)) pub.setSubscribed(false);

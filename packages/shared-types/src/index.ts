@@ -250,6 +250,56 @@ export interface EgressJoinDto {
   token: string;
 }
 
+// --- Diffusion OBS (LiveKit Ingress) ---
+
+export type IngressProtocol = "rtmp" | "whip";
+
+/**
+ * État du flux entrant, reflet direct de IngressState.Status côté LiveKit.
+ * "inactive" = point d'entrée créé mais aucun encodeur connecté (état normal
+ * entre la génération des identifiants et le clic « Démarrer le streaming »
+ * dans OBS), pas une anomalie.
+ */
+export type IngressStatus = "inactive" | "buffering" | "publishing" | "error" | "complete";
+
+export interface RoomIngressDto {
+  ingressId: string;
+  protocol: IngressProtocol;
+  /** Serveur RTMP (rtmps://…) ou point d'entrée WHIP (https://…) à coller dans OBS. */
+  url: string;
+  /** Clé de flux RTMP, ou jeton Bearer WHIP — c'est le SECRET de publication. */
+  streamKey: string;
+  status: IngressStatus;
+  /** Renseigné uniquement en statut "error" (flux non conforme, codec refusé…). */
+  error: string | null;
+}
+
+/**
+ * Réponse de GET /rooms/:id/ingress — enveloppe volontaire plutôt qu'un
+ * `RoomIngressDto | null` nu : NestJS répond à un `null` par un corps VIDE (pas
+ * la chaîne "null"), que `res.json()` côté client ne sait pas analyser. Le cas
+ * « aucune diffusion configurée » est le cas normal, il doit se lire sans
+ * dépendre d'une erreur silencieusement avalée.
+ */
+export interface RoomIngressStateDto {
+  ingress: RoomIngressDto | null;
+}
+
+export interface CreateIngressDto {
+  protocol: IngressProtocol;
+}
+
+/**
+ * Préfixe d'identité du participant LiveKit créé par un ingress OBS.
+ *
+ * Partagé backend/frontend parce que les deux extrémités doivent le
+ * reconnaître : le backend pour l'exclure de la liste de présence (ce n'est
+ * pas quelqu'un), le frontend pour en faire la vidéo principale de la scène.
+ * L'identification fine passe par la métadonnée `isIngress` (voir
+ * IngressService) ; ce préfixe garantit en plus l'unicité par salle.
+ */
+export const INGRESS_IDENTITY_PREFIX = "obs-";
+
 // --- Intégration Moodle (plugin mod_webinairev2, auth par clé API serveur-à-serveur) ---
 
 export interface MoodleRoomDto {

@@ -13,3 +13,19 @@ export function isModeratorMetadata(metadata: string | undefined): boolean {
     return false;
   }
 }
+
+/**
+ * Participant créé par une diffusion OBS (voir IngressService côté backend) :
+ * ce n'est pas quelqu'un dans la salle mais une source de contenu de
+ * l'animateur. Sa vidéo passe au premier plan de la scène, et les actions de
+ * modération individuelles (donner la parole, nommer présentateur) n'ont aucun
+ * sens sur lui.
+ */
+export function isIngressMetadata(metadata: string | undefined): boolean {
+  if (!metadata) return false;
+  try {
+    return JSON.parse(metadata)?.isIngress === true;
+  } catch {
+    return false;
+  }
+}

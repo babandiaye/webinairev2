@@ -12,7 +12,28 @@ import { BreakoutRoomsService } from "../breakout-rooms/breakout-rooms.service";
 import { PresentationsService } from "../presentations/presentations.service";
 import { S3Service } from "../storage/s3.service";
 import { EnrollmentsService } from "../enrollments/enrollments.service";
+import { IngressService } from "../ingress/ingress.service";
 import { UpdateRoomSettingsDto } from "./dto/update-room-settings.dto";
+
+/**
+ * Deux drapeaux portés par les métadonnées du participant LiveKit.
+ *
+ * `isModerator` vient du jeton (livekit-token.service.ts) ; `isIngress` marque
+ * le participant créé par une diffusion OBS (IngressService). Les deux excluent
+ * des actions « à tous les participants » : un modérateur ne se coupe pas
+ * lui-même, et un flux OBS n'est pas quelqu'un à modérer mais une source de
+ * contenu de l'animateur — verrouiller les micros ne doit pas couper sa
+ * diffusion. Métadonnée absente ou malformée : aucun des deux, jamais de
+ * promotion dans le doute.
+ */
+function parseParticipantFlags(metadata?: string): { isModerator: boolean; isIngress: boolean } {
+  try {
+    const parsed = metadata ? JSON.parse(metadata) : null;
+    return { isModerator: parsed?.isModerator === true, isIngress: parsed?.isIngress === true };
+  } catch {
+    return { isModerator: false, isIngress: false };
+  }
+}
 
 @Injectable()
 export class RoomsService {
@@ -24,7 +45,8 @@ export class RoomsService {
     private readonly breakoutRooms: BreakoutRoomsService,
     private readonly presentations: PresentationsService,
     private readonly s3: S3Service,
-    private readonly enrollments: EnrollmentsService
+    private readonly enrollments: EnrollmentsService,
+    private readonly ingress: IngressService
   ) {}
 
   async create(title: string, creator: SessionUser): Promise<RoomDto> {
@@ -164,14 +186,7 @@ export class RoomsService {
   private async hasActiveModerator(roomName: string): Promise<boolean> {
     try {
       const participants = await this.livekitClients.roomService.listParticipants(roomName);
-      return participants.some((p) => {
-        try {
-          const meta = p.metadata ? JSON.parse(p.metadata) : null;
-          return meta?.isModerator === true;
-        } catch {
-          return false;
-        }
-      });
+      return participants.some((p) => parseParticipantFlags(p.metadata).isModerator);
     } catch {
       // Salle introuvable côté LiveKit (jamais démarrée, ou fermée) : personne dedans.
       return false;
@@ -180,6 +195,11 @@ export class RoomsService {
 
   async close(id: string): Promise<RoomDto> {
     const room = await this.findOneOrThrow(id);
+
+    // Avant de supprimer la salle côté LiveKit : une clé de flux OBS encore
+    // valide permettrait de republier dedans, et LiveKit recréerait la room à la
+    // première trame reçue — la séance « fermée » se rouvrirait toute seule.
+    await this.ingress.deleteForRoomName(room.roomName);
 
     try {
       await this.livekitClients.roomService.deleteRoom(room.roomName);
@@ -217,6 +237,11 @@ export class RoomsService {
     if (room.status === RoomStatus.LIVE) {
       throw new BadRequestException("Fermez la réunion avant de la supprimer définitivement");
     }
+
+    // Une salle peut être supprimée sans avoir été fermée par close() (statut
+    // SCHEDULED, ou ENDED via le webhook room_finished) : le point d'entrée OBS
+    // ne serait alors jamais passé par le nettoyage de close().
+    await this.ingress.deleteForRoomName(room.roomName);
 
     const breakouts = await this.prisma.room.findMany({
       where: { parentRoomId: id, type: RoomType.BREAKOUT },
@@ -327,13 +352,8 @@ export class RoomsService {
     const participants = await this.livekitClients.roomService.listParticipants(room.roomName);
 
     for (const participant of participants) {
-      let isModerator = false;
-      try {
-        isModerator = participant.metadata ? JSON.parse(participant.metadata).isModerator === true : false;
-      } catch {
-        // metadata malformée ignorée — traité comme non-modérateur
-      }
-      if (isModerator) continue;
+      const { isModerator, isIngress } = parseParticipantFlags(participant.metadata);
+      if (isModerator || isIngress) continue;
 
       // source === MICROPHONE (pas seulement type === AUDIO) : un participant qui
       // partage son écran avec le son système publie aussi une piste AUDIO
@@ -426,13 +446,8 @@ export class RoomsService {
     }
 
     for (const participant of participants) {
-      let isModerator = false;
-      try {
-        isModerator = participant.metadata ? JSON.parse(participant.metadata).isModerator === true : false;
-      } catch {
-        // metadata malformée ignorée — traité comme non-modérateur
-      }
-      if (isModerator) continue;
+      const { isModerator, isIngress } = parseParticipantFlags(participant.metadata);
+      if (isModerator || isIngress) continue;
 
       const current = new Set(participant.permission?.canPublishSources ?? []);
       if (room.micLocked) current.delete(TrackSource.MICROPHONE);
@@ -477,13 +492,8 @@ export class RoomsService {
     const participants = await this.livekitClients.roomService.listParticipants(room.roomName);
 
     for (const participant of participants) {
-      let isModerator = false;
-      try {
-        isModerator = participant.metadata ? JSON.parse(participant.metadata).isModerator === true : false;
-      } catch {
-        // metadata malformée ignorée — traité comme non-modérateur
-      }
-      if (isModerator) continue;
+      const { isModerator, isIngress } = parseParticipantFlags(participant.metadata);
+      if (isModerator || isIngress) continue;
 
       const videoTrack = participant.tracks.find(
         (t) => t.type === TrackType.VIDEO && t.source === TrackSource.CAMERA && !t.muted

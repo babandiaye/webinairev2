@@ -2048,6 +2048,124 @@ button.stat-item:focus-visible {
   backdrop-filter: blur(6px);
 }
 
+/* ── Salle : diffusion OBS (LiveKit Ingress) ── */
+/* Le panneau est une colonne flex avec gap : la marge basse que .error-banner
+   porte pour les pages classiques s'y ajoutait au gap et creusait un trou. */
+.breakout-panel .error-banner {
+  margin-bottom: 0;
+}
+.obs-hint {
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: rgba(255, 255, 255, 0.66);
+}
+.obs-protocols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.obs-protocol {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 9px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+  cursor: pointer;
+  text-align: left;
+}
+.obs-protocol strong {
+  font-size: 0.84rem;
+}
+.obs-protocol small {
+  font-size: 0.7rem;
+  color: rgba(255, 255, 255, 0.6);
+}
+.obs-protocol.active {
+  border-color: var(--color-primary);
+  background: rgba(63, 159, 220, 0.2);
+}
+.obs-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.obs-field label {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: rgba(255, 255, 255, 0.6);
+}
+.obs-copy-row {
+  display: flex;
+  gap: 6px;
+}
+/* Monospace et non la police du texte : une clé de flux se relit caractère par
+   caractère quand la copie automatique échoue, et le 0/O ou le l/1 doivent s'y
+   distinguer. */
+.obs-copy-row input {
+  flex: 1;
+  min-width: 0;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+  padding: 7px 10px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.78rem;
+}
+/* .btn-ghost est réglé pour le fond CLAIR des pages (texte gris sur bordure
+   grise) — illisible sur ce panneau sombre. Redéfini ici seulement, la classe
+   servant une douzaine d'autres écrans. */
+.obs-copy-row .btn-ghost,
+.obs-actions .btn-ghost {
+  color: rgba(255, 255, 255, 0.82);
+  border-color: rgba(255, 255, 255, 0.22);
+  padding: 7px 10px;
+}
+.obs-copy-row .btn-ghost:hover,
+.obs-actions .btn-ghost:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+.obs-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+.obs-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+  flex: none;
+}
+.obs-status-idle {
+  color: rgba(255, 255, 255, 0.62);
+}
+.obs-status-pending {
+  color: #f5b544;
+}
+.obs-status-live {
+  color: #3fc46f;
+}
+.obs-status-error {
+  color: #ff9494;
+}
+.obs-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.obs-actions .btn {
+  flex: 1;
+}
+
 /* ── Salle : tableau blanc (Excalidraw) ── */
 .whiteboard-overlay {
   position: absolute;

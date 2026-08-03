@@ -12,6 +12,7 @@ import { WhiteboardModule } from "./whiteboard/whiteboard.module";
 import { PollsModule } from "./polls/polls.module";
 import { PresentationsModule } from "./presentations/presentations.module";
 import { RecordingsModule } from "./recordings/recordings.module";
+import { IngressModule } from "./ingress/ingress.module";
 import { EgressViewModule } from "./egress-view/egress-view.module";
 import { WebhooksModule } from "./webhooks/webhooks.module";
 import { HealthModule } from "./health/health.module";
@@ -35,6 +36,7 @@ import { EnrollmentsModule } from "./enrollments/enrollments.module";
     PollsModule,
     PresentationsModule,
     RecordingsModule,
+    IngressModule,
     EgressViewModule,
     WebhooksModule,
     HealthModule,

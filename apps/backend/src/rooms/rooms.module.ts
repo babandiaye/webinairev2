@@ -7,9 +7,10 @@ import { LiveKitModule } from "../livekit/livekit.module";
 import { BreakoutRoomsModule } from "../breakout-rooms/breakout-rooms.module";
 import { PresentationsModule } from "../presentations/presentations.module";
 import { StorageModule } from "../storage/storage.module";
+import { IngressModule } from "../ingress/ingress.module";
 
 @Module({
-  imports: [LiveKitModule, BreakoutRoomsModule, PresentationsModule, StorageModule],
+  imports: [LiveKitModule, BreakoutRoomsModule, PresentationsModule, StorageModule, IngressModule],
   controllers: [RoomsController],
   providers: [RoomsService, RoomAccessGuard, RoomsReconciliationService],
 })

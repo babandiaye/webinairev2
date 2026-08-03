@@ -29,6 +29,7 @@ import { BreakoutReturnBar } from "./BreakoutReturnBar";
 import { Whiteboard } from "./Whiteboard";
 import { PollsPanel } from "./PollsPanel";
 import { PresentationsPanel } from "./PresentationsPanel";
+import { ObsPanel } from "./ObsPanel";
 
 // Doit correspondre exactement au message de RoomsService.join() côté backend —
 // c'est ce qui distingue une vraie erreur (salle introuvable, etc.) d'une simple
@@ -363,6 +364,13 @@ export function RoomPage() {
             open={activePanel === "presentations"}
             onClose={() => setActivePanel(null)}
           />
+          {canManage && !isInBreakout && (
+            <ObsPanel
+              roomId={activeConnection.room.id}
+              open={activePanel === "obs"}
+              onClose={() => setActivePanel(null)}
+            />
+          )}
           {canManage && (
             <EngagementPanel
               open={activePanel === "engagement"}
